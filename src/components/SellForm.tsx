@@ -31,8 +31,8 @@ const optionPreset: Record<string, OptionDraft> = {
 const defaultPreset: OptionDraft = { name: "색상", values: "블랙, 화이트" };
 
 const saleKinds = [
-  { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
   { v: "new", t: "새 상품(정식 판매)", d: "재고·옵션이 있는 새 상품" },
+  { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
 ] as const;
 
 /** 서버 저장 용량을 줄이려고 긴 변 720px JPEG로 줄여 data URL로 만든다. */
