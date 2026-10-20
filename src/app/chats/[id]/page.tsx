@@ -21,6 +21,7 @@ export default function ChatRoomPage({ params }: { params: Promise<{ id: string 
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const lastAt = useRef<string | null>(null);
+  const loaded = useRef(false);
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,13 +32,18 @@ export default function ChatRoomPage({ params }: { params: Promise<{ id: string 
         const q = lastAt.current ? `?after=${encodeURIComponent(lastAt.current)}` : "";
         const r = await api<{ room: ChatRoom; messages: ChatMessage[] }>(`/api/chats/${id}${q}`);
         if (stop) return;
+        loaded.current = true;
         setRoom(r.room);
         if (r.messages.length) {
           lastAt.current = r.messages[r.messages.length - 1].createdAt;
           setMessages((cur) => [...cur, ...r.messages.filter((m) => !cur.some((c) => c.id === m.id))]);
         }
+        setError("");
       } catch (e) {
-        if (!stop) setError(e instanceof Error ? e.message : "채팅을 불러오지 못했어요.");
+        if (stop) return;
+        // 첫 로딩 실패나 권한 없음만 화면에 표시하고, 폴링 중 일시적인 네트워크 오류는 다음 주기에 다시 시도한다.
+        const status = (e as { status?: number }).status;
+        if (!loaded.current || status === 401 || status === 404) setError(e instanceof Error ? e.message : "채팅을 불러오지 못했어요.");
       }
     };
     void poll();
@@ -57,7 +63,6 @@ export default function ChatRoomPage({ params }: { params: Promise<{ id: string 
     try {
       const { message } = await api<{ message: ChatMessage }>(`/api/chats/${id}`, { text });
       setMessages((cur) => (cur.some((c) => c.id === message.id) ? cur : [...cur, message]));
-      lastAt.current = message.createdAt;
       setText("");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "메시지를 보내지 못했어요.");

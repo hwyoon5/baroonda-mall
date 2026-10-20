@@ -23,8 +23,8 @@ type OptionDraft = { name: string; values: string };
 const splitValues = (v: string) => [...new Set(v.split(",").map((x) => x.trim()).filter(Boolean))].slice(0, MAX_OPTION_VALUES);
 
 const saleKinds = [
-  { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
   { v: "new", t: "새 상품(정식 판매)", d: "재고·옵션이 있는 새 상품" },
+  { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
 ] as const;
 
 /** 긴 변 maxSide px로 줄인 캔버스. */
