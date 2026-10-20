@@ -317,6 +317,26 @@ test("환불: 판매자 판매 취소, 구매자 철회 후 구매 확정·정�
   assert.equal((await listing(l.id)).stock, 1);
 });
 
+test("사진 최대 10장·동영상 최대 2개: 개수·형식 검증, 상세 노출, 저장소 미연결 시 업로드 503", async () => {
+  const img = "data:image/jpeg;base64,/9j/4AAQ";
+  const blob = (dir) => `https://abc123.public.blob.vercel-storage.com/listings/${dir}/m-x1Y2.${dir === "video" ? "mp4" : "jpg"}`;
+  const base = { ...newBase, title: `미디어${run}`, stock: 1 };
+  assert.equal((await call("/api/listings", { ...base, images: Array(11).fill(img) }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...base, images: [img], videos: Array(3).fill(blob("video")) }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...base, images: [img], videos: ["https://evil.example.com/listings/video/a.mp4"] }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...base, images: [img], videos: [blob("photo")] }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...base, images: ["https://evil.example.com/a.jpg"] }, seller)).status, 400);
+  const v2 = blob("video").replace("m-x1Y2", "m-z9");
+  const { listing: l } = await ok("/api/listings", { ...base, images: [...Array(9).fill(img), blob("photo")], videos: [blob("video"), v2] }, seller);
+  assert.equal(l.images.length, 10);
+  assert.deepEqual(l.videos, [blob("video"), v2]);
+  const html = await (await fetch(`${BASE}/listings/${l.id}`)).text();
+  assert.equal(html.split("<video").length - 1, 2);
+  assert.ok(html.includes(blob("video")) && html.includes(v2));
+  assert.deepEqual((await ok("/api/upload")).enabled, false);
+  assert.equal((await call("/api/upload", { type: "blob.generate-client-token", payload: { pathname: "listings/photo/a.jpg" } }, seller)).status, 503);
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

@@ -1,3 +1,4 @@
+import { isBlobUrl } from "@/lib/media";
 import { findChatRoom, getListing, listChatRooms, newId, saveChatRoom, withLock } from "@/lib/server/db";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
 import type { ChatRoom } from "@/lib/types";
@@ -25,7 +26,7 @@ export const POST = handle(async (req) => {
       id: newId("c_"),
       listingId: listing.id,
       listingTitle: listing.title,
-      listingImage: listing.images[0]?.startsWith("/") ? listing.images[0] : undefined,
+      listingImage: listing.images[0]?.startsWith("/") || isBlobUrl(listing.images[0], "photo") ? listing.images[0] : undefined,
       buyer,
       seller: listing.seller,
       lastAt: now,

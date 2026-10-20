@@ -22,6 +22,7 @@ export async function GET() {
     appWallet: !!appWalletAddress,
     redis: storageMode === "redis",
     mockOff: !piMock && process.env.NEXT_PUBLIC_PI_MOCK !== "1",
+    blob: !!process.env.BLOB_READ_WRITE_TOKEN,
   };
   const warnings = [
     !checks.piApiKey && "PI_API_KEY 없음: 로그인 검증·결제 승인 불가",
@@ -29,6 +30,7 @@ export async function GET() {
     walletError && `앱 지갑: ${walletError} → 판매자 정산·환불(A2U) 불가`,
     !checks.redis && (storageMisconfigured ? "운영 환경에 Redis 미연결: 저장이 차단됨" : "메모리 저장소 사용 중(개발용)"),
     !checks.mockOff && "PI_MOCK이 켜져 있음: 운영 배포에서는 반드시 끄세요",
+    !checks.blob && "BLOB_READ_WRITE_TOKEN 없음: 동영상 업로드 불가, 사진은 판매글에 직접 저장(용량 제한)",
   ].filter(Boolean);
   return json({
     ok: Object.values(checks).every(Boolean),
