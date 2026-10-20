@@ -1,3 +1,5 @@
+import type { SellerPolicy } from "./business";
+
 export type TradeMethod = "direct" | "delivery";
 export type ListingStatus = "draft" | "selling" | "reserved" | "sold" | "paused";
 export type Condition = "new" | "used";
@@ -44,7 +46,7 @@ export type Listing = {
   usageGrade?: UsageGrade;
   usageNote?: string;
   /** 새 상품 전용: 이 상품에만 쓰는 반품·환불·고지 문구. 없으면 판매자 사업자 정보의 기본 규정을 표시한다. */
-  policy?: { returnPolicy?: string; shippingInfo?: string; legalNotice?: string };
+  policy?: SellerPolicy;
   emoji?: string;
   bg?: string;
   seller: PiUser;

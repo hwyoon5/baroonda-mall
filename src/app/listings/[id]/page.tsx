@@ -9,6 +9,7 @@ import SubHeader from "@/components/SubHeader";
 import TradeMethodTag from "@/components/TradeMethodTag";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
+import ShippingTable from "@/components/ShippingTable";
 import { POLICY_FIELDS, formatBizRegNo, hasPolicy, pickPolicy } from "@/lib/business";
 import { getBusiness, getListing, listReviewsForSeller } from "@/lib/server/db";
 import { listingKindLabel, usageGradeLabel } from "@/lib/types";
@@ -140,6 +141,12 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
 
       {policy && hasPolicy(policy) && (
         <section aria-label="반품·교환·환불 안내" className="mt-2 space-y-3 bg-white px-4 py-4 text-xs leading-relaxed text-gray-600">
+          {policy.shipping && (
+            <div>
+              <h2 className="mb-1 text-sm font-bold text-gray-900">배송·반품 조건</h2>
+              <ShippingTable terms={policy.shipping} />
+            </div>
+          )}
           {POLICY_FIELDS.filter((f) => policy[f.key]?.trim()).map((f) => (
             <div key={f.key}>
               <h2 className="mb-1 text-sm font-bold text-gray-900">{f.label}</h2>

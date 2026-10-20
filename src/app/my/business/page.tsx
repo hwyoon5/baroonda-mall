@@ -2,11 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
+import ShippingTermsFields from "@/components/ShippingTermsFields";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useStore } from "@/components/store/StoreProvider";
 import { useAuth } from "@/hooks/useAuth";
-import { DEFAULT_POLICY, MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, type SellerBusiness } from "@/lib/business";
+import { DEFAULT_POLICY, MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, normalizeShipping, toShippingDraft, type SellerBusiness, type ShippingDraft } from "@/lib/business";
 import { api } from "@/lib/client/api";
 
 type Form = {
@@ -21,8 +22,9 @@ type Form = {
   returnPolicy: string;
   shippingInfo: string;
   legalNotice: string;
+  shipping: ShippingDraft;
 };
-const empty: Form = { bizName: "", ownerName: "", bizRegNo: "", mailOrderNo: "", mailOrderExempt: false, address: "", phone: "", email: "", returnPolicy: "", shippingInfo: "", legalNotice: "" };
+const empty: Form = { bizName: "", ownerName: "", bizRegNo: "", mailOrderNo: "", mailOrderExempt: false, address: "", phone: "", email: "", returnPolicy: "", shippingInfo: "", legalNotice: "", shipping: toShippingDraft() };
 
 const field = "w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-pi focus:outline-none";
 
@@ -51,6 +53,7 @@ export default function BusinessPage() {
             returnPolicy: b.returnPolicy ?? "",
             shippingInfo: b.shippingInfo ?? "",
             legalNotice: b.legalNotice ?? "",
+            shipping: toShippingDraft(b.shipping),
           });
           setSaved(true);
         }
@@ -73,7 +76,8 @@ export default function BusinessPage() {
     (f.mailOrderExempt || isMailOrderNo(f.mailOrderNo)) &&
     f.address.trim().length >= 5 &&
     isBizPhone(f.phone) &&
-    (!f.email || isEmail(f.email));
+    (!f.email || isEmail(f.email)) &&
+    !normalizeShipping(f.shipping).error;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -127,6 +131,13 @@ export default function BusinessPage() {
           {row("address", "사업장 주소", { maxLength: 120, placeholder: "사업자등록증의 사업장 주소" })}
           {row("phone", "고객센터 전화번호", { inputMode: "tel", maxLength: 20, placeholder: "예: 02-123-4567" })}
           {row("email", "이메일", { inputMode: "email", maxLength: 80, placeholder: "선택" }, false)}
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <h2 className="text-sm font-bold text-gray-900">배송·반품 조건</h2>
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              여기 입력한 조건은 새 상품을 등록할 때 자동으로 불러와져 상품 상세에 표로 표시돼요. 상품마다 다르면 상품 등록 화면에서 고칠 수 있어요.
+            </p>
+            <ShippingTermsFields idPrefix={`${id}-ship`} value={f.shipping} onChange={(shipping) => set({ shipping })} />
+          </div>
           <div className="space-y-3 border-t border-gray-100 pt-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-900">반품·교환·법적 고지</h2>

@@ -3,6 +3,7 @@ import { isUsageGrade, type Listing, type ListingOption, type TradeMethod, type 
 import { isBlobUrl, MAX_PHOTOS, MAX_VIDEOS } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS } from "@/lib/options";
 import { MAX_POLICY_CHARS, hasPolicy } from "@/lib/business";
+import { parseShipping } from "./business-input";
 import { HttpError } from "./http";
 
 /** Blob 미연결 시 사진은 data URL로 저장된다. Vercel 함수 요청 한도(4.5MB) 아래로 묶는다. */
@@ -28,7 +29,7 @@ export type ListingInput = Partial<{
   variants: unknown;
   usageGrade: string;
   usageNote: string;
-  policy: { returnPolicy?: unknown; shippingInfo?: unknown; legalNotice?: unknown } | null;
+  policy: { returnPolicy?: unknown; shippingInfo?: unknown; legalNotice?: unknown; shipping?: unknown } | null;
   draft: boolean;
 }>;
 
@@ -112,6 +113,7 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
     returnPolicy: str(rawPolicy.returnPolicy, MAX_POLICY_CHARS) || undefined,
     shippingInfo: str(rawPolicy.shippingInfo, MAX_POLICY_CHARS) || undefined,
     legalNotice: str(rawPolicy.legalNotice, MAX_POLICY_CHARS) || undefined,
+    shipping: parseShipping(rawPolicy.shipping),
   };
   const price = pricePi ?? 0;
   return {
