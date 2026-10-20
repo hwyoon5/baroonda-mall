@@ -6,7 +6,7 @@ export default function ListingThumb({ listing, className = "", emojiClass = "te
     <div className={`relative flex items-center justify-center overflow-hidden ${listing.bg ?? "bg-gray-100"} ${className}`}>
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img src={src} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
       ) : (
         <span className={emojiClass} aria-hidden>
           {listing.emoji ?? "📦"}

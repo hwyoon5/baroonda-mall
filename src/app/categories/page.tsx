@@ -10,7 +10,8 @@ export default function CategoriesPage() {
         {[usedCategory, ...listingCategories].map((c) => (
           <li key={c.id}>
             <Link href={c.href} className="tap flex flex-col items-center gap-2 rounded-xl border border-gray-100 py-4">
-              <span className={`flex h-12 w-12 items-center justify-center rounded-2xl text-2xl ${c.bg}`}>{c.icon}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={c.image} alt="" width={64} height={64} className={`h-16 w-16 rounded-2xl object-cover ring-1 ring-black/5 ${c.bg}`} />
               <span className="text-xs font-medium text-gray-700">{c.name}</span>
             </Link>
           </li>

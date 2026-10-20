@@ -1,6 +1,13 @@
-export type Category = { id: string; name: string; icon: string; bg: string; href: string; badge?: string };
+export type Category = { id: string; name: string; icon: string; bg: string; href: string; image: string; badge?: string };
 
-const cat = (id: string, name: string, icon: string, bg: string): Category => ({ id, name, icon, bg, href: `/category/${id}` });
+const cat = (id: string, name: string, icon: string, bg: string): Category => ({
+  id,
+  name,
+  icon,
+  bg,
+  href: `/category/${id}`,
+  image: `/images/categories/${id}.jpg`,
+});
 
 /** 판매자가 고를 수 있는 상품 카테고리 */
 export const listingCategories: Category[] = [
@@ -20,7 +27,7 @@ export const usedCategory: Category = { ...cat("used", "중고마켓", "🤝", "
 export const homeCategories: Category[] = [
   usedCategory,
   ...listingCategories,
-  { id: "all", name: "전체보기", icon: "➕", bg: "bg-violet-50", href: "/categories" },
+  { id: "all", name: "전체보기", icon: "➕", bg: "bg-violet-50", href: "/categories", image: "/images/categories/all.jpg" },
 ];
 
 export function findCategory(id: string) {

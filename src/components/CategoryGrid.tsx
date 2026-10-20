@@ -8,8 +8,9 @@ export default function CategoryGrid({ items = defaultCategories }: { items?: Ca
         {items.map((c) => (
           <li key={c.id}>
             <Link href={c.href} className="tap flex flex-col items-center gap-1.5 rounded-xl py-1">
-              <span className={`relative flex h-12 w-12 items-center justify-center rounded-2xl text-2xl ${c.bg}`}>
-                {c.icon}
+              <span className={`relative block h-14 w-14 rounded-2xl ring-1 ring-black/5 ${c.bg}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={c.image} alt="" width={56} height={56} className="h-full w-full rounded-2xl object-cover" />
                 {c.badge && (
                   <span className="absolute -right-1.5 -top-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-extrabold leading-none text-white">
                     {c.badge}

@@ -13,7 +13,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ id: s
   const items = await listListings({ category: id });
   return (
     <>
-      <SubHeader title={`${category.icon} ${category.name}`} />
+      <SubHeader title={category.name} />
       <ListingGrid items={items} emptyText={`${category.name}에 등록된 상품이 아직 없어요.`} />
     </>
   );
