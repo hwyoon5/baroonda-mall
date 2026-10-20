@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import OrderRow from "@/components/OrderRow";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
@@ -11,11 +12,19 @@ import type { Order } from "@/lib/types";
 type Tab = "purchases" | "sales";
 
 export default function OrdersPage() {
-  const { user, ready } = useAuth();
-  // 마이페이지의 '판매 내역'은 /orders?tab=sales 로 들어온다(로그인 확인 후 클라이언트에서만 렌더링).
-  const [tab, setTab] = useState<Tab>(() =>
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "sales" ? "sales" : "purchases",
+  return (
+    <Suspense>
+      <Orders />
+    </Suspense>
   );
+}
+
+/** 탭은 URL(?tab=sales)로 관리해서 마이페이지의 '판매 내역' 링크로 바로 판매 탭을 연다. */
+function Orders() {
+  const { user, ready } = useAuth();
+  const router = useRouter();
+  const tab: Tab = useSearchParams().get("tab") === "sales" ? "sales" : "purchases";
+  const setTab = (t: Tab) => router.replace(t === "sales" ? "/orders?tab=sales" : "/orders", { scroll: false });
   const [data, setData] = useState<Record<Tab, Order[]> | null>(null);
   const [error, setError] = useState("");
 
