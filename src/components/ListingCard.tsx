@@ -23,7 +23,8 @@ export default function ListingCard({ listing: l }: { listing: Listing }) {
             <TradeMethodTag key={m} method={m} />
           ))}
         </div>
-        <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-gray-800">{l.title}</p>
+        {l.brand && <p className="mt-1.5 truncate text-[11px] font-bold text-gray-500">{l.brand}</p>}
+        <p className={`${l.brand ? "mt-0.5" : "mt-1.5"} line-clamp-2 text-[13px] leading-snug text-gray-800`}>{l.title}</p>
         <div className="mt-1 flex items-baseline gap-1.5">
           {rate > 0 && <span className="text-sm font-extrabold text-red-500">{rate}%</span>}
           <PiPrice value={l.pricePi} size="lg" />

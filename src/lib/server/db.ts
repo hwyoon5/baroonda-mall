@@ -118,7 +118,7 @@ export async function listListings(f: ListingFilter = {}): Promise<Listing[]> {
   if (f.dealsOnly) all = all.filter((l) => l.originalPricePi && l.originalPricePi > l.pricePi && l.status === "selling");
   if (f.q) {
     const q = f.q.toLowerCase();
-    all = all.filter((l) => `${l.title} ${l.description}`.toLowerCase().includes(q));
+    all = all.filter((l) => `${l.title} ${l.brand ?? ""} ${l.description}`.toLowerCase().includes(q));
   }
   if (!f.includeDrafts) all = all.filter((l) => l.status !== "draft");
   if (!f.includeSold) all = all.filter((l) => l.status !== "sold" && l.status !== "paused");
