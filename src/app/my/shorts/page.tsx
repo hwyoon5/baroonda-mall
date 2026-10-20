@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import FilePicker from "@/components/FilePicker";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useStore } from "@/components/store/StoreProvider";
@@ -207,8 +208,28 @@ export default function MyShortsPage() {
             ) : !videoUrl ? (
               <>
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <PickButton icon="📹" label="촬영하기" capture blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
-                  <PickButton icon="🖼️" label="앨범에서 선택" blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
+                  <FilePicker
+                    label="촬영하기"
+                    accept="video/*" capture
+                    blocked={!!blockReason}
+                    onBlocked={onBlocked}
+                    onFiles={(f) => pick(f[0])}
+                    className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-gray-200 py-5 text-sm font-bold"
+                  >
+                    <span className="text-2xl">📹</span>
+                    <span>촬영하기</span>
+                  </FilePicker>
+                  <FilePicker
+                    label="앨범에서 선택"
+                    accept="video/*"
+                    blocked={!!blockReason}
+                    onBlocked={onBlocked}
+                    onFiles={(f) => pick(f[0])}
+                    className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-gray-200 py-5 text-sm font-bold"
+                  >
+                    <span className="text-2xl">🖼️</span>
+                    <span>앨범에서 선택</span>
+                  </FilePicker>
                 </div>
                 <p className="mt-2 text-[11px] text-gray-400">눌러도 선택창이 열리지 않으면 Pi Browser를 완전히 닫았다가 다시 열어 주세요.</p>
               </>
@@ -323,58 +344,5 @@ export default function MyShortsPage() {
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * 투명한 file input을 버튼 전체에 덮어, 사용자가 input을 직접 누르게 한다.
- * (스크립트로 input.click()을 부르는 방식은 일부 모바일 WebView에서 조용히 무시된다.)
- * 고를 때마다 input을 새로 만들어 같은 파일도 다시 고를 수 있고, 막힌 상태면 이유를 알려 준다.
- */
-function PickButton({
-  icon,
-  label,
-  capture,
-  blocked,
-  onBlocked,
-  onPick,
-}: {
-  icon: string;
-  label: string;
-  capture?: boolean;
-  blocked: boolean;
-  onBlocked: () => void;
-  onPick: (f: File | undefined) => void;
-}) {
-  const [gen, setGen] = useState(0);
-  return (
-    <label
-      className={`tap relative flex w-full flex-col items-center gap-1 overflow-hidden rounded-xl border-2 border-dashed border-gray-200 py-5 text-sm font-bold ${blocked ? "opacity-40" : ""}`}
-    >
-      <span aria-hidden className="text-2xl">
-        {icon}
-      </span>
-      <span aria-hidden>{label}</span>
-      {blocked ? (
-        <button type="button" aria-label={label} onClick={onBlocked} className="absolute inset-0 z-10" />
-      ) : (
-        <input
-          key={gen}
-          type="file"
-          accept="video/*"
-          capture={capture ? "environment" : undefined}
-          aria-label={label}
-          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
-          onClick={(e) => {
-            e.currentTarget.value = "";
-          }}
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            setGen((g) => g + 1);
-            onPick(f);
-          }}
-        />
-      )}
-    </label>
   );
 }
