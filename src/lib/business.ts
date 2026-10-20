@@ -10,7 +10,115 @@ export type SellerBusiness = {
   address: string;
   phone: string;
   email?: string;
+  /** 표준 반품·환불 규정, 교환·배송 안내, 법적 고지. 새 상품 상세 하단에 기본으로 표시된다. */
+  returnPolicy?: string;
+  shippingInfo?: string;
+  legalNotice?: string;
+  /** 배송·반품 조건(배송 방법, 택배사, 배송비, 반품/교환 배송비, 신청 기한). 새 상품 등록 시 기본으로 연동된다. */
+  shipping?: ShippingTerms;
   updatedAt: string;
+};
+
+/** 배송·반품 조건. 금액은 π 단위 안내용이며 결제 금액에는 더하지 않는다. */
+export type ShippingTerms = {
+  method?: string;
+  courier?: string;
+  fee?: number;
+  freeOver?: number;
+  remoteFee?: number;
+  returnFee?: number;
+  exchangeFee?: number;
+  requestDays?: number;
+};
+export type ShippingDraft = Record<keyof ShippingTerms, string>;
+
+export const SHIPPING_METHODS = ["택배", "직접 배송", "퀵·당일 배송", "방문 수령"];
+export const COURIERS = ["CJ대한통운", "우체국택배", "한진택배", "롯데택배", "로젠택배", "편의점택배"];
+export const SHIPPING_FEE_FIELDS = [
+  { key: "fee", label: "기본 배송비" },
+  { key: "freeOver", label: "무료배송 기준 금액" },
+  { key: "remoteFee", label: "제주·도서산간 추가 배송비" },
+  { key: "returnFee", label: "반품 배송비(편도)" },
+  { key: "exchangeFee", label: "교환 배송비(왕복)" },
+] as const;
+export const MAX_SHIPPING_FEE = 10000;
+/** 전자상거래법상 청약철회 기간은 최소 7일 */
+export const MIN_REQUEST_DAYS = 7;
+const SHIPPING_KEYS = ["method", "courier", "fee", "freeOver", "remoteFee", "returnFee", "exchangeFee", "requestDays"] as const;
+
+export const toShippingDraft = (t?: ShippingTerms): ShippingDraft =>
+  Object.fromEntries(SHIPPING_KEYS.map((k) => [k, t?.[k] === undefined ? "" : String(t[k])])) as ShippingDraft;
+
+/** 입력값을 검증·정리한다. 빈 칸은 빼고, 모두 비면 terms 없이 돌려준다. (서버·화면 공용) */
+export function normalizeShipping(v: unknown): { terms?: ShippingTerms; error?: string } {
+  if (!v || typeof v !== "object") return {};
+  const o = v as Record<string, unknown>;
+  const blank = (x: unknown) => x === undefined || x === null || String(x).trim() === "";
+  const terms: ShippingTerms = {};
+  for (const k of ["method", "courier"] as const) {
+    const s = typeof o[k] === "string" ? (o[k] as string).trim().slice(0, 30) : "";
+    if (s) terms[k] = s;
+  }
+  for (const { key, label } of SHIPPING_FEE_FIELDS) {
+    if (blank(o[key])) continue;
+    const n = Number(String(o[key]).trim());
+    if (!Number.isFinite(n) || n < 0 || n > MAX_SHIPPING_FEE) return { error: `${label}: 0~${MAX_SHIPPING_FEE}π 사이 숫자로 입력해 주세요.` };
+    terms[key] = Math.round(n * 100) / 100;
+  }
+  if (!blank(o.requestDays)) {
+    const n = Number(String(o.requestDays).trim());
+    if (!Number.isInteger(n) || n < MIN_REQUEST_DAYS || n > 365)
+      return { error: `반품·교환 신청 기한은 ${MIN_REQUEST_DAYS}~365일로 입력해 주세요(전자상거래법상 최소 ${MIN_REQUEST_DAYS}일).` };
+    terms.requestDays = n;
+  }
+  return Object.keys(terms).length ? { terms } : {};
+}
+
+export const hasShipping = (t?: ShippingTerms) => !!t && Object.keys(t).length > 0;
+
+/** 상품 상세·미리보기용 표 행 */
+export function shippingRows(t: ShippingTerms): [string, string][] {
+  const pi = (n: number) => `${n}π`;
+  const rows: [string, string | undefined][] = [
+    ["배송 방법", t.method],
+    ["택배사", t.courier],
+    ["배송비", t.fee === undefined ? undefined : (t.fee === 0 ? "무료" : pi(t.fee)) + (t.fee && t.freeOver ? ` (${pi(t.freeOver)} 이상 구매 시 무료)` : "")],
+    ["제주·도서산간", t.remoteFee === undefined ? undefined : `추가 ${pi(t.remoteFee)}`],
+    ["반품 배송비", t.returnFee === undefined ? undefined : `편도 ${pi(t.returnFee)}`],
+    ["교환 배송비", t.exchangeFee === undefined ? undefined : `왕복 ${pi(t.exchangeFee)}`],
+    ["반품·교환 신청 기한", t.requestDays === undefined ? undefined : `상품 수령 후 ${t.requestDays}일 이내`],
+  ];
+  return rows.filter((r): r is [string, string] => r[1] !== undefined);
+}
+
+export type SellerPolicy = { returnPolicy?: string; shippingInfo?: string; legalNotice?: string; shipping?: ShippingTerms };
+export const POLICY_FIELDS = [
+  { key: "returnPolicy", label: "반품·환불 규정" },
+  { key: "shippingInfo", label: "교환·배송 안내" },
+  { key: "legalNotice", label: "법적 고지" },
+] as const;
+export const MAX_POLICY_CHARS = 2000;
+export const pickPolicy = (p: SellerPolicy): SellerPolicy => ({ returnPolicy: p.returnPolicy, shippingInfo: p.shippingInfo, legalNotice: p.legalNotice, shipping: p.shipping });
+export const hasPolicy = (p?: SellerPolicy) => !!p && (POLICY_FIELDS.some((f) => p[f.key]?.trim()) || hasShipping(p.shipping));
+
+/** 전자상거래법(청약철회 등) 기준 예시 문구. 판매자가 자기 사정에 맞게 고쳐 쓴다. */
+export const DEFAULT_POLICY: Required<Omit<SellerPolicy, "shipping">> = {
+  returnPolicy: [
+    "상품을 받은 날부터 7일 이내에 반품·환불을 요청할 수 있어요.",
+    "단순 변심 반품 시 왕복 배송비는 구매자 부담이에요.",
+    "상품 하자·오배송은 받은 날부터 3개월 이내(또는 사실을 안 날부터 30일 이내) 판매자 부담으로 교환·환불해 드려요.",
+    "포장 훼손으로 상품 가치가 떨어졌거나, 사용·소비한 경우, 복제 가능한 상품의 포장을 뜯은 경우에는 반품이 어려워요.",
+    "환불은 반품 상품 확인 후 3영업일 이내에 결제한 π로 돌려드려요.",
+  ].join("\n"),
+  shippingInfo: [
+    "결제 완료 후 1~3영업일 이내 발송해요(주말·공휴일 제외).",
+    "교환은 같은 상품의 다른 옵션으로만 가능하며, 재고가 없으면 환불로 처리해요.",
+    "교환·반품 접수는 채팅 또는 고객센터로 문의해 주세요.",
+  ].join("\n"),
+  legalNotice: [
+    "미성년자가 법정대리인의 동의 없이 구매한 경우 본인 또는 법정대리인이 구매를 취소할 수 있어요.",
+    "소비자 피해 보상, 상품 불만 및 분쟁 처리는 「전자상거래 등에서의 소비자보호에 관한 법률」 및 공정거래위원회 소비자분쟁해결기준에 따라요.",
+  ].join("\n"),
 };
 
 export const digitsOnly = (v: string) => v.replace(/\D/g, "");

@@ -1,8 +1,14 @@
-import { digitsOnly, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, normalizeMailOrderNo, type SellerBusiness } from "@/lib/business";
+import { MAX_POLICY_CHARS, digitsOnly, normalizeShipping, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, normalizeMailOrderNo, type SellerBusiness } from "@/lib/business";
 import { getBusiness } from "./db";
 import { HttpError } from "./http";
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+export function parseShipping(v: unknown) {
+  const { terms, error } = normalizeShipping(v);
+  if (error) throw new HttpError(400, error);
+  return terms;
+}
 
 export function parseBusinessInput(b: Partial<Record<keyof SellerBusiness, unknown>>): SellerBusiness {
   const need = (ok: boolean, msg: string) => {
@@ -23,6 +29,7 @@ export function parseBusinessInput(b: Partial<Record<keyof SellerBusiness, unkno
   need(address.length >= 5, "사업장 주소를 입력해 주세요.");
   need(isBizPhone(phone), "고객센터 전화번호를 올바르게 입력해 주세요.");
   need(email === "" || isEmail(email), "이메일 형식이 올바르지 않아요.");
+  const shipping = parseShipping(b.shipping);
   return {
     bizName,
     ownerName,
@@ -32,6 +39,10 @@ export function parseBusinessInput(b: Partial<Record<keyof SellerBusiness, unkno
     address,
     phone,
     email: email || undefined,
+    returnPolicy: str(b.returnPolicy, MAX_POLICY_CHARS) || undefined,
+    shippingInfo: str(b.shippingInfo, MAX_POLICY_CHARS) || undefined,
+    legalNotice: str(b.legalNotice, MAX_POLICY_CHARS) || undefined,
+    shipping,
     updatedAt: new Date().toISOString(),
   };
 }

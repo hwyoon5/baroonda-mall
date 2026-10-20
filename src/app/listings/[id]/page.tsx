@@ -9,7 +9,8 @@ import SubHeader from "@/components/SubHeader";
 import TradeMethodTag from "@/components/TradeMethodTag";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
-import { formatBizRegNo } from "@/lib/business";
+import ShippingTable from "@/components/ShippingTable";
+import { POLICY_FIELDS, formatBizRegNo, hasPolicy, pickPolicy } from "@/lib/business";
 import { getBusiness, getListing, listReviewsForSeller } from "@/lib/server/db";
 import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
@@ -24,6 +25,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   if (!listing || listing.status === "draft") notFound();
   const sellerReviews = await listReviewsForSeller(listing.seller.uid);
   const business = listing.condition === "new" && !listing.demo ? await getBusiness(listing.seller.uid) : undefined;
+  const policy = listing.condition === "new" ? (listing.policy ?? (business ? pickPolicy(business) : undefined)) : undefined;
   const sellerRating = sellerReviews.length ? (sellerReviews.reduce((a, r) => a + r.rating, 0) / sellerReviews.length).toFixed(1) : null;
   const category = findCategory(listing.category);
   const videos = listing.videos ?? [];
@@ -136,6 +138,23 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         </p>
         <p className="whitespace-pre-line pt-2 leading-relaxed text-gray-700">{listing.description || "판매자가 설명을 남기지 않았어요."}</p>
       </section>
+
+      {policy && hasPolicy(policy) && (
+        <section aria-label="반품·교환·환불 안내" className="mt-2 space-y-3 bg-white px-4 py-4 text-xs leading-relaxed text-gray-600">
+          {policy.shipping && (
+            <div>
+              <h2 className="mb-1 text-sm font-bold text-gray-900">배송·반품 조건</h2>
+              <ShippingTable terms={policy.shipping} />
+            </div>
+          )}
+          {POLICY_FIELDS.filter((f) => policy[f.key]?.trim()).map((f) => (
+            <div key={f.key}>
+              <h2 className="mb-1 text-sm font-bold text-gray-900">{f.label}</h2>
+              <p className="whitespace-pre-line">{policy[f.key]}</p>
+            </div>
+          ))}
+        </section>
+      )}
 
       {business && (
         <section aria-label="판매자 정보" className="mt-2 bg-white px-4 py-4 text-xs leading-relaxed text-gray-600">
