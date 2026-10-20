@@ -55,9 +55,36 @@ export type Listing = {
  * approved → 서버 승인(/approve) 완료, 구매자 서명 대기
  * paid     → 서버 완료(/complete) 완료, 대금은 앱 지갑에 보관(에스크로)
  * shipped  → 판매자 발송/전달
- * completed→ 구매 확정, 판매자 정산 대상
+ * completed→ 구매 확정, 판매자 정산(A2U) 대상
+ * refunded → 구매 확정 전 환불(A2U로 구매자에게 반환)
  */
-export type OrderStatus = "created" | "approved" | "paid" | "shipped" | "completed" | "cancelled";
+export type OrderStatus = "created" | "approved" | "paid" | "shipped" | "completed" | "cancelled" | "refunded";
+
+/** 앱 지갑 → 사용자 송금(Pi A2U). paymentId를 먼저 저장해 두고 재시도 시 이어서 처리한다. */
+export type A2UTransfer = {
+  amount: number;
+  paymentId?: string;
+  txid?: string;
+  /** 블록체인 전송 시작 시각: 응답 전에 실패하면 Horizon에서 memo로 찾아 이중 송금을 막는다 */
+  submittedAt?: string;
+  error?: string;
+  attempts: number;
+  updatedAt: string;
+  completedAt?: string;
+};
+
+export type PayoutStatus = "none" | "pending" | "processing" | "paid" | "failed";
+export type RefundStatus = "requested" | "rejected" | "withdrawn" | "processing" | "refunded" | "failed";
+
+export type Refund = {
+  status: RefundStatus;
+  /** buyer: 구매자 요청, seller: 판매자 직접 판매 취소 */
+  by: "buyer" | "seller";
+  reason: string;
+  requestedAt: string;
+  rejectReason?: string;
+  transfer?: A2UTransfer;
+};
 
 export type Order = {
   id: string;
@@ -73,7 +100,11 @@ export type Order = {
   status: OrderStatus;
   paymentId?: string;
   txid?: string;
-  payout: "none" | "pending" | "paid";
+  payout: PayoutStatus;
+  /** 판매자 정산 송금 (수수료 차감 후 금액) */
+  payoutTransfer?: A2UTransfer;
+  platformFee?: number;
+  refund?: Refund;
   createdAt: string;
   updatedAt: string;
 };
@@ -90,7 +121,28 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
   shipped: "발송 완료",
   completed: "구매 확정",
   cancelled: "취소됨",
+  refunded: "환불 완료",
 };
+
+export const payoutStatusLabel: Record<PayoutStatus, string> = {
+  none: "-",
+  pending: "정산 대기",
+  processing: "정산 중",
+  paid: "정산 완료",
+  failed: "정산 실패",
+};
+
+export const refundStatusLabel: Record<RefundStatus, string> = {
+  requested: "환불 요청됨",
+  rejected: "환불 거절됨",
+  withdrawn: "환불 요청 철회",
+  processing: "환불 송금 중",
+  refunded: "환불 완료",
+  failed: "환불 송금 실패",
+};
+
+/** 환불 송금이 진행 중이거나 판매자 응답을 기다리는 상태 (이때는 발송·구매 확정을 막는다) */
+export const refundOpen = (o: Pick<Order, "refund">) => ["requested", "processing", "failed"].includes(o.refund?.status ?? "");
 
 export function listingStatusText(l: Pick<Listing, "status" | "condition">) {
   if (l.status === "selling") return "판매중";

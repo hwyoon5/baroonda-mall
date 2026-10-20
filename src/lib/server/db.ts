@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
 import type { ChatMessage, ChatRoom, Listing, Order, Review } from "../types";
 import { HttpError } from "./http";
+import { PiConfigError } from "./pi";
 
 /**
  * 저장소: Upstash Redis(REST) 환경변수가 있으면 Redis, 없으면 프로세스 메모리.
@@ -64,14 +65,24 @@ function redisKv(url: string, token: string): Kv {
 const redisUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
 export const storageMode: "redis" | "memory" = redisUrl && redisToken ? "redis" : "memory";
-const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : memoryKv();
+/** Vercel 운영 배포에서 메모리 저장소는 인스턴스마다 데이터가 달라 주문·정산이 유실된다 → 쓰기를 막는다. */
+export const storageMisconfigured = storageMode === "memory" && process.env.VERCEL_ENV === "production" && process.env.PI_MOCK !== "1";
+
+function guarded(base: Kv): Kv {
+  const fail = async (): Promise<never> => {
+    throw new PiConfigError("저장소(Upstash Redis)가 연결되지 않아 저장할 수 없어요. 관리자에게 문의해 주세요.");
+  };
+  return { ...base, hset: fail, lock: fail };
+}
+
+const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : storageMisconfigured ? guarded(memoryKv()) : memoryKv();
 
 const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
-export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+export async function withLock<T>(key: string, fn: () => Promise<T>, ttlMs = 20_000): Promise<T> {
   for (let i = 0; i < 150; i++) {
-    const unlock = await kv.lock(key, 20_000);
+    const unlock = await kv.lock(key, ttlMs);
     if (unlock) {
       try {
         return await fn();

@@ -7,6 +7,7 @@ const styles: Record<OrderStatus, string> = {
   shipped: "bg-sky-50 text-sky-700",
   completed: "bg-emerald-50 text-emerald-700",
   cancelled: "bg-gray-100 text-gray-400",
+  refunded: "bg-rose-50 text-rose-600",
 };
 
 export default function OrderStatusBadge({ status }: { status: OrderStatus }) {

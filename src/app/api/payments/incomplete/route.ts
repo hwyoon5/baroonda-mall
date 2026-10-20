@@ -13,6 +13,7 @@ export const POST = handle(async (req) => {
   if (!fromClient?.identifier) throw new HttpError(400, "payment 정보가 필요해요.");
   const payment = piMock ? fromClient : await getPayment(fromClient.identifier);
   if (payment.user_uid !== user.uid) throw new HttpError(403, "본인 결제만 처리할 수 있어요.");
+  if (payment.direction === "app_to_user") throw new HttpError(400, "정산·환불(A2U) 결제는 서버가 처리해요.");
 
   if (payment.transaction?.txid) await verifyTransactionOnChain(payment);
 

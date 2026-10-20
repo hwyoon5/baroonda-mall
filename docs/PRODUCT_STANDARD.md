@@ -46,9 +46,9 @@
 | Options + Variants (조합별 가격·SKU·재고) | `options[]` + `variants[]: { id, options, stock, committed }` (최대 50조합) | ✅ 조합별 재고 구현 (조합별 가격·SKU는 다음 단계) |
 | Inventory (available / committed) | `stock`(available) / `committed` 분리, `withLock`으로 원자적 처리 | ✅ approve 시 committed, complete 시 확정, cancel 시 되돌림 |
 | Collections | 카테고리 | 그대로 (+ 기획전) |
-| Order financial_status (pending / authorized / paid / refunded) | `OrderStatus` created / approved / paid / cancelled | `refunded` 추가 (A2U 환불) |
+| Order financial_status (pending / authorized / paid / refunded) | `OrderStatus` created / approved / paid / cancelled | ✅ `refunded` (A2U 환불, `src/lib/server/settlement.ts`) |
 | Order fulfillment_status + Fulfillment(tracking) | `shipped` + `order.fulfillment { method, carrier, trackingNumber }` | ✅ 송장 등록 구현 |
-| Payout | `payout: "pending"` | Pi A2U 송금으로 실제 정산 |
+| Payout | `payout` pending → processing → paid / failed, `payoutTransfer` | ✅ 구매 확정 시 Pi A2U 송금, 실패 시 판매자 재시도 |
 
 ### 재고 원칙
 - 재고 변경은 서버에서만 한다(`src/lib/server/orders.ts`, `PATCH /api/listings/[id]`). 클라이언트 값은 신뢰하지 않는다.
@@ -91,7 +91,7 @@
    - 1:1 채팅 ✅ (`/chats`, 3초 폴링, 읽지 않은 수. 실시간 푸시·이미지 전송은 다음 단계)
    - 구매 후기·별점(쿠팡)
 3. **P3 · 운영**
-   - Pi A2U 정산·환불
+   - Pi A2U 정산·환불 ✅ (구매 확정 → 판매자 정산, 발송 전 즉시 환불 / 발송 후 판매자 승인, `/my/payouts`, 배포 점검 `/api/health`, `docs/DEPLOY.md`)
    - Pi `in_app_notifications` 알림
    - 이미지 오브젝트 스토리지
    - 신고·차단

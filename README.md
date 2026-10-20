@@ -33,8 +33,8 @@ Next.js 15 (App Router) + Tailwind CSS v4.
 1. 구매자가 `π로 구매하기` → 서버가 주문 생성 → `Pi.createPayment()` (구매자 → 앱 지갑)
 2. 서버 승인: 금액·주문번호·구매자 일치 검증 후 `/approve`, 상품은 `예약중`
 3. 구매자 서명 → 서버 완료: `/complete` → 주문 `결제 완료`
-4. 판매자 발송 → 구매자 구매 확정 → 주문 `구매 확정`, 판매자 정산 대기
-5. 판매자 정산(앱 → 판매자, A2U)은 아직 미구현. 현재는 `payout: pending`으로 기록만 됨
+4. 판매자 발송 → 구매자 구매 확정 → 주문 `구매 확정`
+5. 구매 확정 즉시 앱 지갑 → 판매자 A2U 정산(`payout: paid`). 구매 확정 전에는 환불(A2U로 구매자에게 반환) 가능
 
 ## 환경변수
 `.env.example` 참고. Vercel에는 `PI_API_KEY`, `SESSION_SECRET`, 그리고 Upstash Redis(`KV_REST_API_URL`, `KV_REST_API_TOKEN`)를 설정하세요.
@@ -60,3 +60,15 @@ PI_MOCK=1 NEXT_PUBLIC_PI_MOCK=1 npm run dev
 ```bash
 PI_MOCK=1 NEXT_PUBLIC_PI_MOCK=1 npm run build && npm run test:logic
 ```
+
+## 정산·환불 (P3, Pi A2U)
+
+| API | 설명 |
+|---|---|
+| `POST /api/orders/[id] {action:"confirm"}` | 구매 확정 → 판매자에게 A2U 정산(수수료 `PLATFORM_FEE_PERCENT` 차감). 실패 시 `payout:"failed"`, 판매자가 `payout_retry` |
+| `refund_request {reason}` | 구매자 환불 요청. 발송 전(`paid`)이면 즉시 A2U 환불, 발송 후면 판매자 승인 대기 |
+| `refund_approve` / `refund_reject {reason?}` / `refund_withdraw` | 판매자 승인·거절 / 구매자 철회 |
+| `seller_cancel {reason?}` / `refund_retry` | 판매자 판매 취소(전액 환불) / 실패한 환불 송금 재시도 |
+| `GET /api/health` | 배포 설정 점검(설정 여부만, 비밀값 비노출) |
+
+배포 설정은 [docs/DEPLOY.md](docs/DEPLOY.md) 참고.

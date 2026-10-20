@@ -5,7 +5,7 @@ import { approvePayment, cancelPayment, completePayment, getPayment, piMock } fr
 
 const STALE_APPROVAL_MS = 10 * 60 * 1000;
 export const listingLock = (id: string) => `listing:${id}`;
-const orderLock = (id: string) => `order:${id}`;
+export const orderLock = (id: string) => `order:${id}`;
 
 /** 판매 가능한 재고(available). 옵션 조합이 있으면 해당 variant 기준 */
 export function availableStock(listing: Listing, variantId?: string) {

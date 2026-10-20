@@ -74,3 +74,14 @@ export async function verifyTransactionOnChain(payment: PiPaymentDTO) {
   const tx = (await res.json()) as { memo?: string };
   if (tx.memo !== payment.identifier) throw new PiApiError(400, "블록체인 거래가 결제 정보와 일치하지 않아요.");
 }
+
+// ---------- App-to-User (A2U): 판매자 정산·구매자 환불 ----------
+/** Pi Platform API `POST /v2/payments` (pi-apps/pi-nodejs의 createPayment와 같은 요청) */
+export function createA2UPayment(payment: { amount: number; memo: string; metadata: Record<string, unknown>; uid: string }) {
+  return piFetch<PiPaymentDTO>("/payments", serverKey(), { method: "POST", body: JSON.stringify({ payment }) });
+}
+
+export async function listIncompleteServerPayments() {
+  const r = await piFetch<{ incomplete_server_payments?: PiPaymentDTO[] }>("/payments/incomplete_server_payments", serverKey());
+  return r.incomplete_server_payments ?? [];
+}

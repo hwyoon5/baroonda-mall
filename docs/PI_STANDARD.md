@@ -37,3 +37,15 @@
 1. Pi Browser에서 `develop.pinet.com` → 앱 등록(Pi Testnet) → API Key 발급
 2. Development URL 설정 후 데스크톱 브라우저에서 Sandbox URL로 접속 (`NEXT_PUBLIC_PI_SANDBOX=true`)
 3. Pi Browser 없이 화면 흐름만 볼 때는 `PI_MOCK=1 NEXT_PUBLIC_PI_MOCK=1`
+
+## App-to-User (A2U): 판매자 정산·환불
+
+공식 서버 SDK [pi-apps/pi-nodejs](https://github.com/pi-apps/pi-nodejs)(`pi-backend`)와 같은 3단계를 따른다 (`src/lib/server/settlement.ts`, `a2u.ts`).
+
+1. `POST /v2/payments {payment:{amount, memo, metadata:{kind, orderId}, uid}}` → paymentId를 주문에 즉시 저장
+2. 앱 지갑(`PI_WALLET_PRIVATE_SEED`)으로 Horizon 트랜잭션 서명·제출 (to = `to_address`, memo = paymentId, timeout 180초, 네트워크 = `payment.network`)
+3. `POST /v2/payments/{id}/complete {txid}`
+
+- `pi-backend`는 취약점이 있는 axios 0.x를 포함한 `stellar-sdk@10`에 의존해서, 서명은 `@stellar/stellar-base`, Horizon 호출은 `fetch`로 같은 트랜잭션을 만든다.
+- 재시도할 때 이중 송금 방지: 저장된 paymentId 재사용 → 결제에 txid가 있으면 complete만 → 제출 기록(`submittedAt`)이 있으면 Horizon에서 memo로 기존 거래 검색 → 타임아웃(180초) 지나기 전에는 재제출하지 않음. 생성이 실패하면 `incomplete_server_payments`에서 같은 orderId를 찾아 이어서 처리.
+- 사용자 측 `onIncompletePaymentFound`로 들어온 A2U 결제는 처리하지 않는다(서버 전용).

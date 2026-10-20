@@ -85,6 +85,7 @@ export default function MyPage() {
             </Link>
             <ul className="mt-1 divide-y divide-gray-100">
               <MenuRow href="/orders?tab=sales" icon="📦" label="판매 내역" desc="결제 완료·발송·구매 확정 현황" />
+              <MenuRow href="/my/payouts" icon="💰" label="정산·환불 내역" desc="구매 확정 → 판매대금 π 정산(A2U), 환불 현황" />
               <MenuRow href="/sell" icon="✏️" label="상품 등록하기" desc="개인 중고 / 새 상품(정식 판매)" />
             </ul>
           </section>

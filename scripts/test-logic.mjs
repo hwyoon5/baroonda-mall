@@ -213,6 +213,96 @@ test("거래 후기: 구매 확정한 구매자만 1회, 판매자 프로필 평
 });
 
 let failed = 0;
+const act = (orderId, action, token, extra = {}) => call(`/api/orders/${orderId}`, { action, ...extra }, token);
+
+test("정산(A2U): 구매 확정 시 판매자에게 1회 송금, 동시 확정에도 중복 없음", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "정산 테스트", pricePi: 2.5, stock: 3 }, seller);
+  const order = await buy(b1, l.id);
+  assert.equal((await act(order.id, "payout_retry", seller)).status, 409);
+  const res = await Promise.all([act(order.id, "confirm", b1), act(order.id, "confirm", b1)]);
+  assert.deepEqual(res.map((r) => r.status).sort(), [200, 409]);
+  const o = res.find((r) => r.status === 200).data.order;
+  assert.equal(o.status, "completed");
+  assert.equal(o.payout, "paid");
+  assert.equal(o.payoutTransfer.amount, 2.5);
+  assert.equal(o.payoutTransfer.attempts, 1);
+  assert.ok(o.payoutTransfer.txid);
+  assert.equal((await act(order.id, "payout_retry", seller)).status, 409);
+  assert.equal((await act(order.id, "payout_retry", b1)).status, 403);
+  assert.equal((await act(order.id, "refund_request", b1, { reason: "변심" })).status, 409);
+});
+
+test("정산 실패 → 주문은 구매 확정 유지, 판매자 재시도로 완료", async () => {
+  const flaky = await signin("flaky");
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "정산 재시도", stock: 1 }, flaky);
+  const order = await buy(b1, l.id);
+  let o = (await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1)).order;
+  assert.equal(o.status, "completed");
+  assert.equal(o.payout, "failed");
+  assert.ok(o.payoutTransfer.error);
+  o = (await ok(`/api/orders/${order.id}`, { action: "payout_retry" }, flaky)).order;
+  assert.equal(o.payout, "paid");
+  assert.equal(o.payoutTransfer.attempts, 2);
+  assert.equal(o.payoutTransfer.error, undefined);
+});
+
+test("환불: 발송 전 취소는 즉시 환불, 중고 예약 해제", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "중고 환불", condition: "used", usageGrade: "A", category: "digital" }, seller);
+  const order = await buy(b1, l.id);
+  assert.equal((await listing(l.id)).status, "reserved");
+  assert.equal((await act(order.id, "refund_request", b1)).status, 400);
+  assert.equal((await act(order.id, "refund_request", seller, { reason: "x" })).status, 403);
+  const o = (await ok(`/api/orders/${order.id}`, { action: "refund_request", reason: "단순 변심" }, b1)).order;
+  assert.equal(o.status, "refunded");
+  assert.equal(o.refund.status, "refunded");
+  assert.equal(o.refund.transfer.amount, o.amount);
+  assert.equal((await listing(l.id)).status, "selling");
+  assert.equal((await act(order.id, "confirm", b1)).status, 409);
+  assert.equal((await act(order.id, "ship", seller, { method: "direct" })).status, 409);
+});
+
+test("환불: 발송 후 요청 → 확정 차단 → 거절 → 재요청 → 승인, 재고 복구", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "발송 후 환불", stock: 1 }, seller);
+  const order = await buy(b1, l.id);
+  assert.equal((await listing(l.id)).status, "sold");
+  await ok(`/api/orders/${order.id}`, { action: "ship", method: "direct" }, seller);
+  assert.equal((await ok(`/api/orders/${order.id}`, { action: "refund_request", reason: "하자" }, b1)).order.refund.status, "requested");
+  assert.equal((await act(order.id, "confirm", b1)).status, 409);
+  assert.equal((await act(order.id, "refund_request", b1, { reason: "또" })).status, 409);
+  assert.equal((await act(order.id, "refund_approve", b1)).status, 403);
+  assert.equal((await act(order.id, "refund_approve", b2)).status, 404);
+  const rej = (await ok(`/api/orders/${order.id}`, { action: "refund_reject", reason: "정상 제품" }, seller)).order;
+  assert.deepEqual([rej.status, rej.refund.status, rej.refund.rejectReason], ["shipped", "rejected", "정상 제품"]);
+  await ok(`/api/orders/${order.id}`, { action: "refund_request", reason: "사진 첨부해요" }, b1);
+  const o = (await ok(`/api/orders/${order.id}`, { action: "refund_approve" }, seller)).order;
+  assert.equal(o.status, "refunded");
+  const cur = await listing(l.id);
+  assert.deepEqual([cur.stock, cur.committed, cur.status], [1, 0, "selling"]);
+  assert.equal((await act(order.id, "refund_retry", seller)).status, 409);
+});
+
+test("환불: 판매자 판매 취소, 구매자 철회 후 구매 확정·정산", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "취소·철회", stock: 2 }, seller);
+  const o1 = await buy(b1, l.id);
+  assert.equal((await ok(`/api/orders/${o1.id}`, { action: "seller_cancel", reason: "재고 부족" }, seller)).order.status, "refunded");
+  const o2 = await buy(b2, l.id);
+  await ok(`/api/orders/${o2.id}`, { action: "ship", method: "direct" }, seller);
+  await ok(`/api/orders/${o2.id}`, { action: "refund_request", reason: "잘못 주문" }, b2);
+  assert.equal((await ok(`/api/orders/${o2.id}`, { action: "refund_withdraw" }, b2)).order.refund.status, "withdrawn");
+  const done = (await ok(`/api/orders/${o2.id}`, { action: "confirm" }, b2)).order;
+  assert.deepEqual([done.status, done.payout], ["completed", "paid"]);
+  assert.equal((await listing(l.id)).stock, 1);
+});
+
+test("배포 점검: /api/health는 설정 여부만 노출", async () => {
+  const h = await ok("/api/health");
+  assert.equal(h.storage, "memory");
+  assert.equal(h.checks.mockOff, false);
+  assert.equal(h.ok, false);
+  assert.ok(!JSON.stringify(h).includes("Key "));
+  assert.equal((await fetch(`${BASE}/my/payouts`)).status, 200);
+});
+
 for (const [name, fn] of tests) {
   try {
     await fn();
