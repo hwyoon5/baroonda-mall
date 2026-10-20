@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import BuyBar from "@/components/BuyBar";
 import FastDeliveryTag from "@/components/FastDeliveryTag";
@@ -13,6 +14,10 @@ import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+function ListingVideo({ src, poster }: { src: string; poster?: string }) {
+  return <video src={src} poster={poster} controls playsInline preload="metadata" className="aspect-square w-full shrink-0 snap-start bg-black object-contain" />;
+}
+
 export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const listing = await getListing((await params).id);
   if (!listing || listing.status === "draft") notFound();
@@ -24,12 +29,21 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <SubHeader title={listing.title} />
-      {listing.images.length > 1 ? (
-        <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">
-          {listing.images.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={src} alt={`${listing.title} 사진 ${i + 1}`} className="aspect-square w-full shrink-0 snap-start object-cover" />
-          ))}
+      {listing.images.length > 1 || listing.video ? (
+        <div className="relative">
+          <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">
+            {listing.images.map((src, i) => (
+              <Fragment key={i}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt={`${listing.title} 사진 ${i + 1}`} className="aspect-square w-full shrink-0 snap-start object-cover" />
+                {i === 0 && listing.video && <ListingVideo src={listing.video} poster={src} />}
+              </Fragment>
+            ))}
+            {!listing.images.length && listing.video && <ListingVideo src={listing.video} />}
+          </div>
+          <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white">
+            {listing.video ? "▶ 동영상 · " : ""}사진 {listing.images.length}
+          </span>
         </div>
       ) : (
         <ListingThumb listing={listing} className="aspect-square" emojiClass="text-[9rem]" />

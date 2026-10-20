@@ -12,6 +12,11 @@ export default function ListingThumb({ listing, className = "", emojiClass = "te
           {listing.emoji ?? "📦"}
         </span>
       )}
+      {listing.video && (
+        <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1 py-0.5 text-[10px] font-bold leading-none text-white" aria-label="동영상 있음">
+          ▶
+        </span>
+      )}
       {listing.status !== "selling" && (
         <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-sm font-extrabold text-white">
           {listingStatusText(listing)}

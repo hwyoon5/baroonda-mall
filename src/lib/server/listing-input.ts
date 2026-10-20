@@ -1,9 +1,11 @@
 import { isListingCategory } from "@/lib/categories";
 import { isUsageGrade, type Listing, type ListingOption, type TradeMethod, type Variant } from "@/lib/types";
+import { isBlobUrl, MAX_PHOTOS } from "@/lib/media";
 import { HttpError } from "./http";
 
-const MAX_IMAGES = 3;
+/** Blob 미연결 시 사진은 data URL로 저장된다. Vercel 함수 요청 한도(4.5MB) 아래로 묶는다. */
 const MAX_IMAGE_CHARS = 400_000;
+const MAX_INLINE_TOTAL_CHARS = 3_000_000;
 const MAX_OPTIONS = 3;
 const MAX_OPTION_VALUES = 10;
 export const MAX_VARIANTS = 50;
@@ -21,6 +23,7 @@ export type ListingInput = Partial<{
   location: string;
   fastShipping: boolean;
   images: string[];
+  video: string | null;
   stock: number;
   options: unknown;
   variants: unknown;
@@ -94,10 +97,14 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
   }
   need(isNew || isUsageGrade(b.usageGrade), "사용감을 선택해 주세요.");
 
-  const images = (b.images ?? []).slice(0, MAX_IMAGES);
-  if (images.some((src) => typeof src !== "string" || !src.startsWith("data:image/") || src.length > MAX_IMAGE_CHARS)) {
-    throw new HttpError(400, "사진 형식이 올바르지 않거나 너무 커요.");
+  const images = b.images ?? [];
+  if (!Array.isArray(images) || images.length > MAX_PHOTOS) throw new HttpError(400, `사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`);
+  const inline = (src: unknown): src is string => typeof src === "string" && src.startsWith("data:image/") && src.length <= MAX_IMAGE_CHARS;
+  if (!images.every((src) => isBlobUrl(src, "photo") || inline(src))) throw new HttpError(400, "사진 형식이 올바르지 않거나 너무 커요.");
+  if (images.filter(inline).reduce((n, src) => n + src.length, 0) > MAX_INLINE_TOTAL_CHARS) {
+    throw new HttpError(400, "사진 용량이 너무 커요. 장수를 줄여 주세요.");
   }
+  if (b.video && !isBlobUrl(b.video, "video")) throw new HttpError(400, "동영상 형식이 올바르지 않아요.");
   const price = pricePi ?? 0;
   return {
     title,
@@ -112,6 +119,7 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
     location: str(b.location, 30) || undefined,
     fastShipping: tradeMethods.includes("delivery") && Boolean(b.fastShipping),
     images,
+    video: b.video || undefined,
     ...(isNew
       ? { stock, committed: 0, soldCount: 0, options, variants }
       : { usageGrade: isUsageGrade(b.usageGrade) ? b.usageGrade : undefined, usageNote: str(b.usageNote, 300) || undefined }),

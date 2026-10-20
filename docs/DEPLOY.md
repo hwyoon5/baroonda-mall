@@ -11,6 +11,7 @@ PR을 `main`에 머지하기 전에 아래를 Vercel 프로젝트(`taxitago/baro
 | `PI_WALLET_PRIVATE_SEED` | Production(필요 시 Preview) | Developer Portal → 내 앱 → App Wallet 생성 시 받은 비밀 시드(`S…`, 56자) | 판매자 정산·환불(A2U) 불가 |
 | `SESSION_SECRET` | Production, Preview | 임의의 긴 문자열 (`openssl rand -base64 48`) | PI_API_KEY로 서명(키 교체 시 전원 로그아웃) |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Production, Preview | 아래 2번 Upstash 연결 시 자동 생성 (`UPSTASH_REDIS_REST_URL/TOKEN`도 인식) | 운영에서는 저장이 차단됨(데이터 유실 방지) |
+| `BLOB_READ_WRITE_TOKEN` | Production, Preview | 아래 2-1 Vercel Blob 연결 시 자동 생성 | 동영상 업로드 불가, 사진은 판매글에 data URL로 저장(장당 약 720px) |
 | `PLATFORM_FEE_PERCENT` | 선택 | 정산 시 차감할 수수료 % (0~30, 기본 0) | 0% |
 | `NEXT_PUBLIC_PI_SANDBOX` | 선택 | Pi Testnet Sandbox로 테스트할 때만 `true` | `false` |
 
@@ -27,6 +28,13 @@ PR을 `main`에 머지하기 전에 아래를 Vercel 프로젝트(`taxitago/baro
 3. Redeploy 후 `/api/health`에서 `"storage": "redis"` 확인.
 
 저장 키는 모두 `bo:` 접두사(Hash)이고, 재고·주문·정산은 Redis `SET NX PX` 락으로 직렬화합니다.
+
+## 2-1. Vercel Blob 연결 (판매글 사진·동영상)
+
+1. Vercel 프로젝트 → **Storage** → **Create Database** → **Blob** 선택 → 프로젝트에 연결(Production·Preview).
+2. `BLOB_READ_WRITE_TOKEN`이 자동 추가되면 다시 배포합니다. `/api/health`의 `checks.blob`이 `true`면 완료.
+3. 사진은 최대 10장(브라우저에서 1280px JPEG로 줄여 업로드), 동영상은 1개·60초·50MB 이하(MP4/MOV/WebM)입니다. 파일은 브라우저에서 Blob으로 직접 올라가고, 서버(`/api/upload`)는 로그인 사용자에게만 형식·용량이 제한된 업로드 토큰을 발급합니다.
+4. Hobby 플랜 Blob 무료 한도(저장 용량·전송량)를 넘으면 과금되거나 업로드가 막힐 수 있으니 Vercel → Usage에서 확인하세요.
 
 ## 3. Pi Developer Portal
 
