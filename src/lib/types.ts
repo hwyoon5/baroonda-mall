@@ -190,6 +190,8 @@ export type Short = {
   id: string;
   /** Vercel Blob 동영상 URL */
   videoUrl: string;
+  /** 대표 프레임 이미지(Blob 사진 URL). 목록 썸네일·피드 포스터로 쓴다. */
+  posterUrl?: string;
   caption: string;
   listingId?: string;
   author: PiUser;

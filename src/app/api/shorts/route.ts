@@ -15,16 +15,18 @@ export const GET = handle(async (req) => {
 
 export const POST = handle(async (req) => {
   const user = requireUser(req);
-  const b = await readJson<{ videoUrl?: unknown; caption?: unknown; listingId?: unknown }>(req);
+  const b = await readJson<{ videoUrl?: unknown; posterUrl?: unknown; caption?: unknown; listingId?: unknown }>(req);
   const videoUrl = b.videoUrl;
   if (!isBlobUrl(videoUrl, "video")) throw new HttpError(400, "동영상을 먼저 올려 주세요.");
+  const posterUrl = b.posterUrl == null || b.posterUrl === "" ? undefined : b.posterUrl;
+  if (posterUrl !== undefined && !isBlobUrl(posterUrl, "photo")) throw new HttpError(400, "대표 이미지 주소가 올바르지 않아요.");
   const caption = parseCaption(b.caption);
   const listingId = await ownListingId(user.uid, b.listingId);
   const short = await withLock(`shorts:${user.uid}`, async () => {
     if ((await listShorts({ authorUid: user.uid, includeHidden: true })).length >= MAX_SHORTS_PER_USER) {
       throw new HttpError(400, `쇼츠는 최대 ${MAX_SHORTS_PER_USER}개까지 등록할 수 있어요. 안 쓰는 쇼츠를 삭제해 주세요.`);
     }
-    const s: Short = { id: newId("s_"), videoUrl, caption, listingId, author: user, status: "public", createdAt: new Date().toISOString() };
+    const s: Short = { id: newId("s_"), videoUrl, posterUrl, caption, listingId, author: user, status: "public", createdAt: new Date().toISOString() };
     await saveShort(s);
     return s;
   });

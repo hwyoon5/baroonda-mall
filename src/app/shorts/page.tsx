@@ -112,10 +112,11 @@ function ShortItem({ short, muted, root }: { short: ShortView; muted: boolean; r
       <video
         ref={video}
         src={short.videoUrl}
+        poster={short.posterUrl}
         muted
         loop
         playsInline
-        preload="metadata"
+        preload={active ? "auto" : "none"}
         onClick={() => setPaused((p) => !p)}
         className="h-full w-full object-contain"
       />
