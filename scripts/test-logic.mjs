@@ -372,6 +372,37 @@ test("사업자 정보: 검증, 새 상품만 필수(개인 중고·임시저장
   assert.equal((await call("/api/me/business")).status, 401);
 });
 
+test("쇼츠: 등록·내 상품 연결·숨김·삭제·권한, 피드/관리 화면", async () => {
+  const vid = "https://abc123.public.blob.vercel-storage.com/listings/video/s-x1Y2.mp4";
+  assert.equal((await call("/api/shorts", { videoUrl: vid })).status, 401, "로그인 필요");
+  assert.equal((await call("/api/shorts", { videoUrl: "https://evil.example.com/listings/video/a.mp4" }, b1)).status, 400, "외부 URL");
+  assert.equal((await call("/api/shorts", { videoUrl: vid, caption: "x".repeat(101) }, b1)).status, 400, "설명 100자");
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "쇼츠 상품", pricePi: 3, stock: 2 }, seller);
+  assert.equal((await call("/api/shorts", { videoUrl: vid, listingId: l.id }, b1)).status, 400, "남의 상품 연결 불가");
+  const { short } = await ok("/api/shorts", { videoUrl: vid, caption: " 오늘 입고! ", listingId: l.id }, seller);
+  assert.equal(short.caption, "오늘 입고!");
+  assert.equal(short.status, "public");
+  const inFeed = async () => (await ok("/api/shorts")).shorts.find((s) => s.id === short.id);
+  const f = await inFeed();
+  assert.equal(f.listing.title, "쇼츠 상품");
+  assert.equal(f.listing.pricePi, 3);
+  assert.equal((await call(`/api/shorts/${short.id}`, { status: "hidden" }, b1, "PATCH")).status, 404, "남의 쇼츠 수정 불가");
+  await ok(`/api/shorts/${short.id}`, { status: "hidden" }, seller, "PATCH");
+  assert.equal(await inFeed(), undefined, "숨김은 피드 제외");
+  assert.equal((await ok("/api/shorts?author=me", undefined, seller)).shorts.find((s) => s.id === short.id).status, "hidden");
+  assert.equal((await call("/api/shorts?author=me")).status, 401);
+  assert.equal((await call(`/api/shorts/${short.id}`, { status: "deleted" }, seller, "PATCH")).status, 400);
+  await ok(`/api/shorts/${short.id}`, { status: "public", listingId: null }, seller, "PATCH");
+  assert.equal((await inFeed()).listing, undefined, "연결 해제");
+  assert.equal((await call(`/api/shorts/${short.id}`, undefined, b1, "DELETE")).status, 404, "남의 쇼츠 삭제 불가");
+  await ok(`/api/shorts/${short.id}`, undefined, seller, "DELETE");
+  assert.equal(await inFeed(), undefined);
+  assert.ok(!(await ok("/api/shorts?author=me", undefined, seller)).shorts.some((s) => s.id === short.id));
+  assert.equal((await call(`/api/shorts/${short.id}`, { status: "public" }, seller, "PATCH")).status, 404, "삭제 후 복구 불가");
+  for (const p of ["/shorts", "/my/shorts"]) assert.equal((await fetch(BASE + p)).status, 200, p);
+  assert.ok((await (await fetch(BASE + "/")).text()).includes('href="/shorts"'), "하단 쇼츠 탭");
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

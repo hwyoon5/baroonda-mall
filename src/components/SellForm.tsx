@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { api } from "@/lib/client/api";
-import { uploadMedia, videoDuration } from "@/lib/client/media";
+import { uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
 import { formatBizRegNo, type SellerBusiness } from "@/lib/business";
 import { listingCategories } from "@/lib/categories";
 import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
@@ -56,7 +56,6 @@ async function preparePhoto(file: File, blob: boolean): Promise<string> {
   return uploadMedia(jpeg, "photo", "jpg");
 }
 
-const videoExt = (type: string) => (type === "video/quicktime" ? "mov" : type === "video/webm" ? "webm" : "mp4");
 
 export default function SellForm({ draftId }: { draftId?: string }) {
   const id = useId();
