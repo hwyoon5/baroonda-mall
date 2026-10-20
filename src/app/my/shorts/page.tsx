@@ -12,6 +12,8 @@ import { MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, VIDEO_TYPES } from "@/lib/media";
 import { MAX_SHORT_CAPTION, MAX_SHORTS_PER_USER } from "@/lib/shorts";
 import type { Listing, ShortView } from "@/lib/types";
 
+const BUILD = (process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7);
+
 const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export default function MyShortsPage() {
@@ -203,10 +205,13 @@ export default function MyShortsPage() {
                 </div>
               </div>
             ) : !videoUrl ? (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <PickButton icon="📹" label="촬영하기" capture blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
-                <PickButton icon="🖼️" label="앨범에서 선택" blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
-              </div>
+              <>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <PickButton icon="📹" label="촬영하기" capture blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
+                  <PickButton icon="🖼️" label="앨범에서 선택" blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
+                </div>
+                <p className="mt-2 text-[11px] text-gray-400">눌러도 선택창이 열리지 않으면 Pi Browser를 완전히 닫았다가 다시 열어 주세요.</p>
+              </>
             ) : (
               <div className="mt-3 space-y-3">
                 <video src={videoUrl} controls playsInline className="mx-auto aspect-[9/16] max-h-80 rounded-xl bg-black" />
@@ -314,6 +319,7 @@ export default function MyShortsPage() {
               </ul>
             )}
           </section>
+          {BUILD && <p className="text-center text-[10px] text-gray-300">버전 {BUILD}</p>}
         </div>
       )}
     </div>
@@ -342,7 +348,7 @@ function PickButton({
 }) {
   const [gen, setGen] = useState(0);
   return (
-    <div
+    <label
       className={`tap relative flex w-full flex-col items-center gap-1 overflow-hidden rounded-xl border-2 border-dashed border-gray-200 py-5 text-sm font-bold ${blocked ? "opacity-40" : ""}`}
     >
       <span aria-hidden className="text-2xl">
@@ -369,6 +375,6 @@ function PickButton({
           }}
         />
       )}
-    </div>
+    </label>
   );
 }
