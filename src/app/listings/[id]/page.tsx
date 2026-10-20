@@ -9,6 +9,7 @@ import TradeMethodTag from "@/components/TradeMethodTag";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
 import { getListing } from "@/lib/server/db";
+import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             </Link>
           )}
           {" · "}
-          {listing.condition === "used" ? "중고" : "새상품"}
+          {listingKindLabel[listing.condition]}
         </div>
         <h1 className="mt-1 text-lg font-bold text-gray-900">{listing.title}</h1>
         {listing.originalPricePi && <p className="mt-2 text-sm text-gray-400 line-through">π {formatPi(listing.originalPricePi)}</p>}
@@ -52,6 +53,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           </span>
         </p>
         <div className="mt-3 flex flex-wrap gap-1">
+          <span
+            className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${listing.condition === "new" ? "bg-pi text-white" : "bg-gray-100 text-gray-700"}`}
+          >
+            {listingKindLabel[listing.condition]}
+          </span>
           {listing.fastShipping && <FastDeliveryTag />}
           {listing.tradeMethods.map((m) => (
             <TradeMethodTag key={m} method={m} />
@@ -65,6 +71,39 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             <span className="inline-block w-20 text-gray-500">직거래 장소</span>
             {listing.meetingPlace}
           </p>
+        )}
+        {listing.condition === "used" ? (
+          <>
+            {listing.usageGrade && (
+              <p>
+                <span className="inline-block w-20 text-gray-500">사용감</span>
+                {usageGradeLabel[listing.usageGrade]}
+              </p>
+            )}
+            {listing.usageNote && (
+              <p className="flex">
+                <span className="inline-block w-20 shrink-0 text-gray-500">사용감 설명</span>
+                <span className="whitespace-pre-line text-gray-800">{listing.usageNote}</span>
+              </p>
+            )}
+            <p>
+              <span className="inline-block w-20 text-gray-500">수량</span>1개 (개인 중고)
+            </p>
+          </>
+        ) : (
+          <>
+            <p>
+              <span className="inline-block w-20 text-gray-500">재고</span>
+              {listing.stock ? `${listing.stock}개 남음` : "품절"}
+              {listing.soldCount ? <span className="text-gray-400"> · {listing.soldCount}개 판매</span> : null}
+            </p>
+            {listing.options?.map((o) => (
+              <p key={o.name}>
+                <span className="inline-block w-20 text-gray-500">{o.name}</span>
+                {o.values.join(", ")}
+              </p>
+            ))}
+          </>
         )}
         <p>
           <span className="inline-block w-20 text-gray-500">결제</span>

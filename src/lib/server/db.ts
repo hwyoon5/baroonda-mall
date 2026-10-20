@@ -75,7 +75,7 @@ export async function listListings(f: ListingFilter = {}): Promise<Listing[]> {
     const q = f.q.toLowerCase();
     all = all.filter((l) => `${l.title} ${l.description}`.toLowerCase().includes(q));
   }
-  if (!f.includeSold) all = all.filter((l) => l.status !== "sold");
+  if (!f.includeSold) all = all.filter((l) => l.status !== "sold" && l.status !== "paused");
   return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 

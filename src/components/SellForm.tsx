@@ -4,10 +4,30 @@ import { useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import { api } from "@/lib/client/api";
 import { listingCategories } from "@/lib/categories";
-import type { Condition, Listing, TradeMethod } from "@/lib/types";
+import { usageGradeLabel, type Condition, type Listing, type TradeMethod, type UsageGrade } from "@/lib/types";
 import { useStore } from "./store/StoreProvider";
 
 const MAX_PHOTOS = 3;
+const MAX_OPTIONS = 3;
+
+type OptionDraft = { name: string; values: string };
+
+/** 카테고리별 기본 옵션(새 상품): 첫 옵션 추가 시 채워 넣는다. */
+const optionPreset: Record<string, OptionDraft> = {
+  fashion: { name: "사이즈", values: "S, M, L, XL" },
+  fresh: { name: "중량", values: "1kg, 2kg, 5kg" },
+  beauty: { name: "용량", values: "30ml, 50ml" },
+  digital: { name: "색상", values: "블랙, 화이트" },
+  baby: { name: "연령", values: "0~12개월, 1~3세" },
+  sports: { name: "사이즈", values: "S, M, L" },
+  pet: { name: "중량", values: "500g, 1kg" },
+};
+const defaultPreset: OptionDraft = { name: "색상", values: "블랙, 화이트" };
+
+const saleKinds = [
+  { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
+  { v: "new", t: "새 상품(정식 판매)", d: "재고·옵션이 있는 새 상품" },
+] as const;
 
 /** 서버 저장 용량을 줄이려고 긴 변 720px JPEG로 줄여 data URL로 만든다. */
 async function compressImage(file: File): Promise<string> {
@@ -37,7 +57,11 @@ export default function SellForm() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
-  const [condition, setCondition] = useState<Condition>("used");
+  const [kind, setKind] = useState<Condition>("used");
+  const [usageGrade, setUsageGrade] = useState<UsageGrade>("A");
+  const [usageNote, setUsageNote] = useState("");
+  const [stock, setStock] = useState("10");
+  const [options, setOptions] = useState<OptionDraft[]>([]);
   const [price, setPrice] = useState("");
   const [originalPrice, setOriginalPrice] = useState("");
   const [negotiable, setNegotiable] = useState(false);
@@ -50,7 +74,17 @@ export default function SellForm() {
   const [error, setError] = useState("");
 
   const priceNum = Number(price);
-  const valid = title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0;
+  const isNew = kind === "new";
+  const preset = optionPreset[category] ?? defaultPreset;
+  const parsedOptions = options
+    .map((o) => ({ name: o.name.trim(), values: [...new Set(o.values.split(",").map((v) => v.trim()).filter(Boolean))] }))
+    .filter((o) => o.name || o.values.length);
+  const optionsValid = parsedOptions.every((o) => o.name && o.values.length > 0);
+  const stockNum = Number(stock);
+  const stockValid = Number.isInteger(stockNum) && stockNum >= 1 && stockNum <= 9999;
+  const valid =
+    title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0 && (!isNew || (stockValid && optionsValid));
+  const updateOption = (i: number, patch: Partial<OptionDraft>) => setOptions((cur) => cur.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
   const toggleMethod = (m: TradeMethod) => setMethods((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
 
@@ -74,10 +108,11 @@ export default function SellForm() {
       const { listing } = await api<{ listing: Listing }>("/api/listings", {
         title,
         category,
-        condition,
+        condition: kind,
         pricePi: priceNum,
-        originalPricePi: originalPrice ? Number(originalPrice) : null,
-        negotiable,
+        ...(isNew
+          ? { stock: stockNum, options: parsedOptions, originalPricePi: originalPrice ? Number(originalPrice) : null }
+          : { usageGrade, usageNote, negotiable }),
         tradeMethods: methods,
         fastShipping,
         meetingPlace,
@@ -94,6 +129,7 @@ export default function SellForm() {
   };
 
   const label = "mb-1.5 block text-sm font-bold text-gray-900";
+  const field = "rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pi focus:outline-none";
   const input =
     "w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pi focus:outline-none";
   const chip = (on: boolean) =>
@@ -101,6 +137,24 @@ export default function SellForm() {
 
   return (
     <form onSubmit={submit} className="space-y-5 bg-white px-4 py-4">
+      <div role="tablist" aria-label="판매 유형" className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1">
+        {saleKinds.map((k) => {
+          const on = kind === k.v;
+          return (
+            <button
+              key={k.v}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setKind(k.v)}
+              className={`tap rounded-lg px-2 py-2 text-center ${on ? "bg-white shadow-sm ring-1 ring-pi/30" : ""}`}
+            >
+              <span className={`block text-sm font-bold ${on ? "text-pi" : "text-gray-500"}`}>{k.t}</span>
+              <span className="text-[10px] text-gray-400">{k.d}</span>
+            </button>
+          );
+        })}
+      </div>
       <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
         {photos.length < MAX_PHOTOS && (
           <label className="tap relative flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 text-gray-400">
@@ -160,23 +214,108 @@ export default function SellForm() {
         </div>
       </fieldset>
 
-      <fieldset>
-        <legend className={label}>상품 상태</legend>
-        <div className="flex gap-2">
-          {(
-            [
-              ["used", "중고"],
-              ["new", "새상품"],
-            ] as const
-          ).map(([v, t]) => (
-            <button key={v} type="button" onClick={() => setCondition(v)} aria-pressed={condition === v} className={chip(condition === v)}>
-              {t}
-            </button>
-          ))}
-        </div>
-      </fieldset>
+      {!isNew ? (
+        <fieldset>
+          <legend className={label}>
+            사용감 <span className="text-red-500">*</span>
+          </legend>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(Object.keys(usageGradeLabel) as UsageGrade[]).map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setUsageGrade(g)}
+                aria-pressed={usageGrade === g}
+                className={`tap rounded-lg border px-1 py-2 text-center text-xs font-medium ${usageGrade === g ? "border-pi bg-pi text-white" : "border-gray-200 text-gray-600"}`}
+              >
+                {usageGradeLabel[g]}
+              </button>
+            ))}
+          </div>
+          <label htmlFor={`${id}-usage`} className="mb-1.5 mt-3 block text-xs font-bold text-gray-700">
+            사용감·하자 설명
+          </label>
+          <textarea
+            id={`${id}-usage`}
+            value={usageNote}
+            onChange={(e) => setUsageNote(e.target.value)}
+            rows={3}
+            maxLength={300}
+            placeholder="사용 기간, 흠집·하자, 구성품 여부 등을 적어주세요."
+            className={`${input} resize-none`}
+          />
+          <p className="mt-1.5 text-[11px] text-gray-500">개인 중고는 수량 1개로 등록되고, 구매 확정되면 거래완료로 바뀌어요.</p>
+        </fieldset>
+      ) : (
+        <>
+          <div>
+            <label htmlFor={`${id}-stock`} className={label}>
+              재고 수량 <span className="text-red-500">*</span>
+            </label>
+            <div className="flex w-40 items-center rounded-lg border border-gray-200 px-3 focus-within:border-pi">
+              <input
+                id={`${id}-stock`}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={9999}
+                step={1}
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
+                className="w-full bg-transparent py-2.5 text-sm text-gray-900 focus:outline-none"
+              />
+              <span className="text-sm text-gray-500">개</span>
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-500">결제가 승인될 때마다 1개씩 줄고, 0개가 되면 품절로 표시돼요.</p>
+          </div>
+          <fieldset>
+            <legend className={label}>
+              옵션 <span className="text-xs font-normal text-gray-400">(선택 · 최대 {MAX_OPTIONS}개)</span>
+            </legend>
+            <div className="space-y-2">
+              {options.map((o, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    aria-label={`옵션 ${i + 1} 이름`}
+                    value={o.name}
+                    onChange={(e) => updateOption(i, { name: e.target.value })}
+                    maxLength={10}
+                    placeholder={preset.name}
+                    className={`${field} w-24 shrink-0`}
+                  />
+                  <input
+                    aria-label={`옵션 ${i + 1} 값`}
+                    value={o.values}
+                    onChange={(e) => updateOption(i, { values: e.target.value })}
+                    placeholder={preset.values}
+                    className={`${field} min-w-0 flex-1`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setOptions((cur) => cur.filter((_, j) => j !== i))}
+                    aria-label={`옵션 ${i + 1} 삭제`}
+                    className="tap shrink-0 px-1 text-lg text-gray-400"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            {options.length < MAX_OPTIONS && (
+              <button
+                type="button"
+                onClick={() => setOptions((cur) => [...cur, cur.length === 0 ? { ...preset } : { name: "", values: "" }])}
+                className="tap mt-2 w-full rounded-lg border border-dashed border-gray-300 py-2 text-xs font-bold text-gray-600"
+              >
+                + 옵션 추가{options.length === 0 && category ? ` (예: ${preset.name})` : ""}
+              </button>
+            )}
+            <p className="mt-1.5 text-[11px] text-gray-500">옵션 값은 쉼표(,)로 구분해요. 구매자는 결제 전에 옵션을 골라요.</p>
+          </fieldset>
+        </>
+      )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className={isNew ? "grid grid-cols-2 gap-3" : ""}>
         <div>
           <label htmlFor={`${id}-price`} className={label}>
             판매 가격 <span className="text-red-500">*</span>
@@ -196,6 +335,7 @@ export default function SellForm() {
             />
           </div>
         </div>
+        {isNew && (
         <div>
           <label htmlFor={`${id}-orig`} className={label}>
             정가 <span className="text-xs font-normal text-gray-400">(선택)</span>
@@ -215,11 +355,14 @@ export default function SellForm() {
             />
           </div>
         </div>
+        )}
       </div>
+      {!isNew && (
       <label className="-mt-2 flex items-center gap-2 text-sm text-gray-700">
         <input type="checkbox" checked={negotiable} onChange={(e) => setNegotiable(e.target.checked)} className="h-4 w-4 accent-pi" />
         가격 제안 받기
       </label>
+      )}
 
       <fieldset>
         <legend className={label}>
@@ -281,7 +424,7 @@ export default function SellForm() {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={5}
-          placeholder="구매 시기, 사용감, 하자 여부 등을 적어주세요."
+          placeholder={isNew ? "제품 구성·소재, 배송 안내, 교환/환불 정책 등을 적어주세요." : "구매 시기, 거래 시 참고할 점 등을 적어주세요."}
           className={`${input} resize-none`}
         />
       </div>
@@ -292,7 +435,7 @@ export default function SellForm() {
 
       {error && <p className="text-sm text-red-500">{error}</p>}
       <button type="submit" disabled={!valid || busy} className="tap w-full rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400">
-        {busy ? "등록 중…" : "판매글 등록하기"}
+        {busy ? "등록 중…" : isNew ? "새 상품 등록하기" : "중고 판매글 등록하기"}
       </button>
     </form>
   );

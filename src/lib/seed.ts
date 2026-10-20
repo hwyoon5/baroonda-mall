@@ -66,6 +66,9 @@ export function demoListings(): Listing[] {
       location: seller.location,
       fastShipping: Boolean(s.fast),
       images: [`/images/listings/demo${i + 1}.jpg`],
+      ...(s.used
+        ? { usageGrade: "A" as const }
+        : { stock: 12 + i, soldCount: 30 + i * 7, options: s.category === "fashion" ? [{ name: "사이즈", values: ["S", "M", "L", "XL"] }] : undefined }),
       emoji: s.emoji,
       bg: s.bg,
       seller: { uid: seller.uid, username: seller.username },

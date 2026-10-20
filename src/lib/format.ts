@@ -14,3 +14,7 @@ export function timeAgo(iso: string, now = Date.now()) {
   if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}시간 전`;
   return `${Math.floor(minutes / (60 * 24))}일 전`;
 }
+
+export function formatOption(option?: Record<string, string>) {
+  return option ? Object.entries(option).map(([k, v]) => `${k}: ${v}`).join(" / ") : "";
+}

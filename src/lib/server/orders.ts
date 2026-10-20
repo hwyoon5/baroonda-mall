@@ -5,8 +5,16 @@ import { approvePayment, cancelPayment, completePayment, getPayment, piMock } fr
 
 const STALE_APPROVAL_MS = 10 * 60 * 1000;
 
-async function releaseListing(order: Order) {
+async function releaseListing(order: Order, wasApproved: boolean) {
   const listing = await getListing(order.listingId);
+  if (listing?.condition === "new") {
+    // 새 상품은 승인 시점에 재고를 차감했으므로 되돌린다.
+    if (!wasApproved) return;
+    listing.stock = (listing.stock ?? 0) + 1;
+    if (listing.status === "sold") listing.status = "selling";
+    await saveListing(listing);
+    return;
+  }
   if (listing && listing.reservedOrderId === order.id && listing.status === "reserved") {
     listing.status = "selling";
     listing.reservedOrderId = undefined;
@@ -18,6 +26,10 @@ async function releaseListing(order: Order) {
 async function ensureListingAvailable(order: Order) {
   const listing = await getListing(order.listingId);
   if (!listing) throw new HttpError(404, "상품을 찾을 수 없어요.");
+  if (listing.condition === "new") {
+    if (listing.status !== "selling" || (listing.stock ?? 0) < 1) throw new HttpError(409, "품절됐거나 판매 중지된 상품이에요.");
+    return listing;
+  }
   if (listing.status === "reserved" && listing.reservedOrderId && listing.reservedOrderId !== order.id) {
     const other = await getOrder(listing.reservedOrderId);
     if (other && other.status === "approved" && Date.now() - new Date(other.updatedAt).getTime() > STALE_APPROVAL_MS) {
@@ -51,8 +63,13 @@ export async function approveOrder(order: Order, paymentId: string) {
   order.status = "approved";
   order.paymentId = paymentId;
   await saveOrder(order);
-  listing.status = "reserved";
-  listing.reservedOrderId = order.id;
+  if (listing.condition === "new") {
+    listing.stock = (listing.stock ?? 1) - 1;
+    if (listing.stock <= 0) listing.status = "sold";
+  } else {
+    listing.status = "reserved";
+    listing.reservedOrderId = order.id;
+  }
   await saveListing(listing);
   return order;
 }
@@ -70,7 +87,7 @@ export async function completeOrder(order: Order, paymentId: string, txid: strin
   order.txid = txid;
   await saveOrder(order);
   const listing = await getListing(order.listingId);
-  if (listing && listing.status !== "sold") {
+  if (listing && listing.condition !== "new" && listing.status !== "sold") {
     listing.status = "reserved";
     listing.reservedOrderId = order.id;
     await saveListing(listing);
@@ -81,8 +98,9 @@ export async function completeOrder(order: Order, paymentId: string, txid: strin
 export async function cancelOrder(order: Order, { notifyPi = false } = {}) {
   if (order.status !== "created" && order.status !== "approved") return order;
   if (notifyPi && order.paymentId && !piMock) await cancelPayment(order.paymentId).catch(() => undefined);
+  const wasApproved = order.status === "approved";
   order.status = "cancelled";
   await saveOrder(order);
-  await releaseListing(order);
+  await releaseListing(order, wasApproved);
   return order;
 }

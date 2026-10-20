@@ -1,6 +1,14 @@
 export type TradeMethod = "direct" | "delivery";
-export type ListingStatus = "selling" | "reserved" | "sold";
+export type ListingStatus = "selling" | "reserved" | "sold" | "paused";
 export type Condition = "new" | "used";
+
+export type UsageGrade = "S" | "A" | "B" | "C";
+export type ListingOption = { name: string; values: string[] };
+
+/** condition = 판매 유형: used → 개인 중고(1개), new → 새 상품(정식 판매, 재고·옵션) */
+export const listingKindLabel: Record<Condition, string> = { used: "개인 중고", new: "정식 판매" };
+export const usageGradeLabel: Record<UsageGrade, string> = { S: "거의 새것", A: "사용감 적음", B: "사용감 있음", C: "사용감 많음" };
+export const isUsageGrade = (v: unknown): v is UsageGrade => typeof v === "string" && v in usageGradeLabel;
 
 export type PiUser = { uid: string; username: string };
 
@@ -18,6 +26,13 @@ export type Listing = {
   location?: string;
   fastShipping: boolean;
   images: string[];
+  /** 새 상품(정식 판매)의 남은 재고. 개인 중고는 항상 1개라 비워둔다. */
+  stock?: number;
+  soldCount?: number;
+  options?: ListingOption[];
+  /** 개인 중고 전용 */
+  usageGrade?: UsageGrade;
+  usageNote?: string;
   emoji?: string;
   bg?: string;
   seller: PiUser;
@@ -41,6 +56,7 @@ export type Order = {
   listingId: string;
   listingTitle: string;
   listingThumb?: string;
+  option?: Record<string, string>;
   amount: number;
   buyer: PiUser;
   seller: PiUser;
@@ -65,3 +81,10 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
   completed: "구매 확정",
   cancelled: "취소됨",
 };
+
+export function listingStatusText(l: Pick<Listing, "status" | "condition">) {
+  if (l.status === "selling") return "판매중";
+  if (l.status === "reserved") return "예약중";
+  if (l.status === "paused") return "판매중지";
+  return l.condition === "new" ? "품절" : "거래완료";
+}

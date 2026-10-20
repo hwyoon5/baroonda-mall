@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { timeAgo } from "@/lib/format";
+import { formatOption, timeAgo } from "@/lib/format";
 import type { Order } from "@/lib/types";
 import OrderStatusBadge from "./OrderStatusBadge";
 import PiPrice from "./PiPrice";
@@ -15,6 +15,7 @@ export default function OrderRow({ order, role }: { order: Order; role: "buyer" 
             <span className="text-[11px] text-gray-400">{timeAgo(order.createdAt)}</span>
           </div>
           <p className="mt-1 truncate text-sm text-gray-800">{order.listingTitle}</p>
+          {order.option && <p className="truncate text-[11px] text-gray-500">{formatOption(order.option)}</p>}
           <p className="text-[11px] text-gray-500">{role === "buyer" ? `판매자 ${order.seller.username}` : `구매자 ${order.buyer.username}`}</p>
         </div>
         <PiPrice value={order.amount} size="md" />

@@ -2,12 +2,37 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import ListingCard from "@/components/ListingCard";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/client/api";
-import type { Listing } from "@/lib/types";
+import type { Listing, ListingStatus } from "@/lib/types";
+
+function MenuRow({ href, icon, label, desc }: { href: string; icon: string; label: string; desc?: string }) {
+  return (
+    <li>
+      <Link href={href} className="tap flex items-center gap-3 px-4 py-3.5">
+        <span className="text-xl" aria-hidden>
+          {icon}
+        </span>
+        <span className="flex-1">
+          <span className="block text-sm font-bold text-gray-900">{label}</span>
+          {desc && <span className="block text-[11px] text-gray-500">{desc}</span>}
+        </span>
+        <span className="text-gray-300" aria-hidden>
+          ›
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+const summary: [ListingStatus, string][] = [
+  ["selling", "판매중"],
+  ["reserved", "거래중"],
+  ["sold", "판매완료"],
+  ["paused", "판매중지"],
+];
 
 export default function MyPage() {
   const { user, ready, signOut } = useAuth();
@@ -37,24 +62,34 @@ export default function MyPage() {
               로그아웃
             </button>
           </section>
-          <nav className="mt-2 grid grid-cols-3 bg-white py-3 text-center text-xs text-gray-700">
-            <Link href="/wishlist" className="tap py-2">
-              <span className="block text-xl">❤️</span>찜 목록
+
+          <section className="mt-2 bg-white pb-1">
+            <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">판매 관리</h2>
+            <Link href="/my/listings" className="tap mx-4 mt-3 block rounded-xl border border-gray-100 p-3">
+              <span className="flex items-center justify-between">
+                <span className="text-sm font-bold text-gray-900">내 상품 관리</span>
+                <span className="text-xs text-gray-400">전체 {mine?.length ?? 0}개 ›</span>
+              </span>
+              <span className="mt-2 grid grid-cols-4 text-center">
+                {summary.map(([s, t]) => (
+                  <span key={s}>
+                    <span className="block text-base font-extrabold text-pi">{mine ? mine.filter((l) => l.status === s).length : "-"}</span>
+                    <span className="block text-[11px] text-gray-500">{t}</span>
+                  </span>
+                ))}
+              </span>
             </Link>
-            <Link href="/orders" className="tap py-2">
-              <span className="block text-xl">🧾</span>거래내역
-            </Link>
-            <Link href="/sell" className="tap py-2">
-              <span className="block text-xl">✏️</span>판매하기
-            </Link>
-          </nav>
-          <section className="mt-2 bg-white px-4 py-4">
-            <h2 className="mb-3 text-base font-extrabold text-gray-900">내 판매글 {mine ? mine.length : ""}</h2>
-            {mine && mine.length === 0 && <p className="py-8 text-center text-sm text-gray-500">아직 등록한 상품이 없어요.</p>}
-            <ul className="grid grid-cols-2 gap-x-3 gap-y-5">
-              {mine?.map((l) => (
-                <ListingCard key={l.id} listing={l} />
-              ))}
+            <ul className="mt-1 divide-y divide-gray-100">
+              <MenuRow href="/orders?tab=sales" icon="📦" label="판매 내역" desc="결제 완료·발송·구매 확정 현황" />
+              <MenuRow href="/sell" icon="✏️" label="상품 등록하기" desc="개인 중고 / 새 상품(정식 판매)" />
+            </ul>
+          </section>
+
+          <section className="mt-2 bg-white">
+            <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">구매</h2>
+            <ul className="divide-y divide-gray-100">
+              <MenuRow href="/orders" icon="🧾" label="구매 내역" />
+              <MenuRow href="/wishlist" icon="❤️" label="찜 목록" />
             </ul>
           </section>
         </>

@@ -1,4 +1,4 @@
-import type { Listing } from "@/lib/types";
+import { listingStatusText, type Listing } from "@/lib/types";
 
 export default function ListingThumb({ listing, className = "", emojiClass = "text-6xl" }: { listing: Listing; className?: string; emojiClass?: string }) {
   const src = listing.images[0];
@@ -14,7 +14,7 @@ export default function ListingThumb({ listing, className = "", emojiClass = "te
       )}
       {listing.status !== "selling" && (
         <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-sm font-extrabold text-white">
-          {listing.status === "reserved" ? "예약중" : "거래완료"}
+          {listingStatusText(listing)}
         </span>
       )}
     </div>

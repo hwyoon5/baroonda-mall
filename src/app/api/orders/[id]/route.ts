@@ -30,7 +30,8 @@ export const POST = handle<Ctx>(async (req, ctx) => {
     order.payout = "pending";
     const listing = await getListing(order.listingId);
     if (listing) {
-      listing.status = "sold";
+      if (listing.condition === "new") listing.soldCount = (listing.soldCount ?? 0) + 1;
+      else listing.status = "sold";
       await saveListing(listing);
     }
   } else {

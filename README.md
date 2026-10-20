@@ -10,16 +10,16 @@ Next.js 15 (App Router) + Tailwind CSS v4.
 | `/categories`, `/category/[id]` | 카테고리 목록 / 카테고리별 상품 (`used` = 중고마켓) |
 | `/search?q=`, `/deals` | 검색 결과 / 할인 상품 |
 | `/listings/[id]` | 상품 상세 + π로 구매하기 |
-| `/sell` | 판매글 등록 (Pi 로그인 필요) |
+| `/sell` | 상품 등록 (Pi 로그인 필요). 상단에서 [개인 중고](1개·사용감 등급/설명) / [새 상품(정식 판매)](재고 수량·옵션) 선택 |
 | `/orders`, `/orders/[id]` | 구매·판매 내역, 주문 상세(발송 처리 / 구매 확정) |
-| `/my`, `/wishlist` | 내 정보·내 판매글 / 찜 목록 |
+| `/my`, `/my/listings`, `/wishlist` | 마이페이지(판매 관리·구매 메뉴) / 내 상품 관리(판매 중지·재개, 재고 수정) / 찜 목록 |
 
 ## API
 | 메서드 · 경로 | 설명 |
 | --- | --- |
 | `POST /api/user/signin` | `Pi.authenticate()` 결과(authResult)의 accessToken을 Pi `/v2/me`로 검증하고 세션 토큰 발급 (Pi 공식 데모 표준, `docs/PI_STANDARD.md`) |
 | `GET /api/me` | 현재 로그인 사용자 |
-| `GET/POST /api/listings`, `GET /api/listings/[id]` | 판매글 조회 / 등록 |
+| `GET/POST /api/listings`, `GET/PATCH /api/listings/[id]` | 판매글 조회 / 등록 / 판매자 상태·재고 수정 |
 | `GET/POST /api/orders`, `GET/POST /api/orders/[id]` | 주문 목록 / 주문 생성(결제 데이터 반환) / 발송·구매확정 |
 | `POST /api/payments/approve` | `onReadyForServerApproval` → 결제 내용 검증 후 Pi `/approve` |
 | `POST /api/payments/complete` | `onReadyForServerCompletion` → Pi `/complete`(txid) |

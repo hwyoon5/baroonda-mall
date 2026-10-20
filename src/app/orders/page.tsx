@@ -12,7 +12,10 @@ type Tab = "purchases" | "sales";
 
 export default function OrdersPage() {
   const { user, ready } = useAuth();
-  const [tab, setTab] = useState<Tab>("purchases");
+  // 마이페이지의 '판매 내역'은 /orders?tab=sales 로 들어온다(로그인 확인 후 클라이언트에서만 렌더링).
+  const [tab, setTab] = useState<Tab>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "sales" ? "sales" : "purchases",
+  );
   const [data, setData] = useState<Record<Tab, Order[]> | null>(null);
   const [error, setError] = useState("");
 

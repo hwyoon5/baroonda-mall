@@ -1,5 +1,6 @@
 "use client";
 
+import { formatOption } from "@/lib/format";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
@@ -65,7 +66,10 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
             </div>
             <Link href={`/listings/${order.listingId}`} className="tap mt-3 flex items-center gap-3">
               <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-violet-50 text-2xl">{order.listingThumb ?? "📦"}</span>
-              <span className="flex-1 text-sm text-gray-800">{order.listingTitle}</span>
+              <span className="flex-1 text-sm text-gray-800">
+                {order.listingTitle}
+                {order.option && <span className="block text-xs text-gray-500">{formatOption(order.option)}</span>}
+              </span>
               <PiPrice value={order.amount} size="lg" />
             </Link>
           </section>
