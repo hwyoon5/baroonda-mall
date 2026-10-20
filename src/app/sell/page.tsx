@@ -3,10 +3,10 @@
 import SubHeader from "@/components/SubHeader";
 import SellForm from "@/components/SellForm";
 import LoginCard from "@/components/pi/LoginCard";
-import { usePi } from "@/components/pi/PiProvider";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function SellPage() {
-  const { user, ready } = usePi();
+  const { user, ready } = useAuth();
   return (
     <>
       <SubHeader title="내 물건 판매하기" />

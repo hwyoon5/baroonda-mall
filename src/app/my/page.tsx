@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 import ListingCard from "@/components/ListingCard";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
-import { usePi } from "@/components/pi/PiProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/client/api";
 import type { Listing } from "@/lib/types";
 
 export default function MyPage() {
-  const { user, ready, logout } = usePi();
+  const { user, ready, signOut } = useAuth();
   const [mine, setMine] = useState<Listing[] | null>(null);
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function MyPage() {
               <p className="text-base font-extrabold text-gray-900">{user.username}</p>
               <p className="text-xs text-gray-500">Pi 계정으로 로그인됨</p>
             </div>
-            <button type="button" onClick={logout} className="tap rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-600">
+            <button type="button" onClick={signOut} className="tap rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-600">
               로그아웃
             </button>
           </section>

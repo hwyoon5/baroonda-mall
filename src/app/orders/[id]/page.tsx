@@ -6,7 +6,7 @@ import OrderStatusBadge from "@/components/OrderStatusBadge";
 import PiPrice from "@/components/PiPrice";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
-import { usePi } from "@/components/pi/PiProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { useStore } from "@/components/store/StoreProvider";
 import { api } from "@/lib/client/api";
 import type { Order, OrderStatus } from "@/lib/types";
@@ -20,7 +20,7 @@ const rank: Record<OrderStatus, number> = { created: 0, approved: 0, cancelled: 
 
 export default function OrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { user, ready } = usePi();
+  const { user, ready } = useAuth();
   const { showToast } = useStore();
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");

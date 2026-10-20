@@ -61,3 +61,16 @@ export function completePayment(paymentId: string, txid: string) {
 export function cancelPayment(paymentId: string) {
   return piFetch<PiPaymentDTO>(`/payments/${encodeURIComponent(paymentId)}/cancel`, serverKey(), { method: "POST" });
 }
+
+/**
+ * Pi 공식 데모 표준: 미완료 결제는 블록체인(Horizon) 거래의 memo가 paymentId와 같은지 확인한 뒤에만 완료한다.
+ */
+export async function verifyTransactionOnChain(payment: PiPaymentDTO) {
+  if (piMock) return;
+  const link = payment.transaction?._link;
+  if (!link) throw new PiApiError(400, "블록체인 거래 정보가 없어요.");
+  const res = await fetch(link, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new PiApiError(502, "블록체인 거래를 조회하지 못했어요.");
+  const tx = (await res.json()) as { memo?: string };
+  if (tx.memo !== payment.identifier) throw new PiApiError(400, "블록체인 거래가 결제 정보와 일치하지 않아요.");
+}

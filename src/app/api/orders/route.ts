@@ -35,7 +35,7 @@ export const POST = handle(async (req) => {
       paymentData: {
         amount: order.amount,
         memo: `바로온다 | ${listing.title}`.slice(0, 60),
-        metadata: { orderId: order.id, listingId: listing.id },
+        metadata: { productId: listing.id, orderId: order.id },
       },
     },
     201,

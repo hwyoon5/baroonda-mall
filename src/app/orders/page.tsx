@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import OrderRow from "@/components/OrderRow";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
-import { usePi } from "@/components/pi/PiProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/client/api";
 import type { Order } from "@/lib/types";
 
 type Tab = "purchases" | "sales";
 
 export default function OrdersPage() {
-  const { user, ready } = usePi();
+  const { user, ready } = useAuth();
   const [tab, setTab] = useState<Tab>("purchases");
   const [data, setData] = useState<Record<Tab, Order[]> | null>(null);
   const [error, setError] = useState("");

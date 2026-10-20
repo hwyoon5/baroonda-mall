@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Listing } from "@/lib/types";
 import PiPrice from "./PiPrice";
-import { PaymentCancelled, usePi } from "./pi/PiProvider";
+import { useAuth } from "@/hooks/useAuth";
+import { PaymentCancelled, usePayments } from "@/hooks/usePayments";
 import { useStore } from "./store/StoreProvider";
 import WishButton from "./WishButton";
 
 export default function BuyBar({ listing }: { listing: Listing }) {
-  const { user, buy } = usePi();
+  const { user } = useAuth();
+  const { orderProduct } = usePayments();
   const { showToast } = useStore();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -20,7 +22,8 @@ export default function BuyBar({ listing }: { listing: Listing }) {
     if (listing.demo) return showToast("예시 상품이라 구매할 수 없어요. 직접 등록된 상품을 구매해 보세요.");
     setBusy(true);
     try {
-      const orderId = await buy(listing.id);
+      const orderId = await orderProduct(listing.id);
+      if (!orderId) return;
       showToast("π 결제가 완료됐어요!");
       router.push(`/orders/${orderId}`);
     } catch (e) {

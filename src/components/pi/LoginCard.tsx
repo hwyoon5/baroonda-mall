@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { usePi } from "./PiProvider";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginCard({ message = "Pi 계정으로 로그인하면 이용할 수 있어요." }: { message?: string }) {
-  const { login } = usePi();
+  const { signIn, error: authError } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -19,7 +19,7 @@ export default function LoginCard({ message = "Pi 계정으로 로그인하면 �
           setBusy(true);
           setError("");
           try {
-            await login();
+            await signIn();
           } catch (e) {
             setError(e instanceof Error ? e.message : "로그인에 실패했어요.");
           } finally {
@@ -30,7 +30,7 @@ export default function LoginCard({ message = "Pi 계정으로 로그인하면 �
       >
         {busy ? "Pi 인증 중…" : "Pi로 로그인"}
       </button>
-      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+      {(error || authError) && <p className="mt-2 text-xs text-red-500">{error || authError}</p>}
     </div>
   );
 }

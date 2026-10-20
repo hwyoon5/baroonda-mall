@@ -34,7 +34,7 @@ async function ensureListingAvailable(order: Order) {
 
 /** 결제 내용이 우리 주문과 일치하는지 Pi 서버 기준으로 검증 */
 function assertPaymentMatches(payment: PiPaymentDTO, order: Order) {
-  if (payment.metadata?.orderId !== order.id) throw new HttpError(400, "결제 정보가 주문과 일치하지 않아요.");
+  if (payment.metadata?.orderId !== order.id || payment.metadata?.productId !== order.listingId) throw new HttpError(400, "결제 정보가 주문과 일치하지 않아요.");
   if (payment.user_uid !== order.buyer.uid) throw new HttpError(403, "결제한 사용자가 주문자와 달라요.");
   if (Math.abs(payment.amount - order.amount) > 1e-7) throw new HttpError(400, "결제 금액이 주문 금액과 달라요.");
   if (payment.direction !== "user_to_app") throw new HttpError(400, "잘못된 결제 방향이에요.");

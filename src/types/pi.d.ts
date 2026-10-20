@@ -1,4 +1,4 @@
-type PiScope = "username" | "payments" | "wallet_address";
+type PiScope = "username" | "payments" | "roles" | "in_app_notifications" | "wallet_address";
 
 type PiPaymentDTO = {
   identifier: string;
@@ -21,7 +21,7 @@ type PiPaymentDTO = {
   transaction: null | { txid: string; verified: boolean; _link: string };
 };
 
-type PiAuthResult = { accessToken: string; user: { uid: string; username: string } };
+type PiAuthResult = { accessToken: string; user: { uid: string; username: string; roles?: string[] } };
 
 type PiPaymentData = { amount: number; memo: string; metadata: Record<string, unknown> };
 

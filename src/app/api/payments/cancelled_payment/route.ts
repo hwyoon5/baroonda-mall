@@ -2,7 +2,7 @@ import { getOrder, getOrderByPayment } from "@/lib/server/db";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
 import { cancelOrder } from "@/lib/server/orders";
 
-/** Pi SDK onCancel / onError → 주문 취소, 상품 예약 해제 */
+/** Pi 공식 데모의 POST /payments/cancelled_payment: onCancel/onError → 주문 취소, 상품 예약 해제 */
 export const POST = handle(async (req) => {
   const user = requireUser(req);
   const { paymentId, orderId } = await readJson<{ paymentId?: string; orderId?: string }>(req);

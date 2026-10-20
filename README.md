@@ -17,13 +17,13 @@ Next.js 15 (App Router) + Tailwind CSS v4.
 ## API
 | 메서드 · 경로 | 설명 |
 | --- | --- |
-| `POST /api/auth/pi` | `Pi.authenticate()`의 accessToken을 Pi `/v2/me`로 검증하고 세션 토큰 발급 |
+| `POST /api/user/signin` | `Pi.authenticate()` 결과(authResult)의 accessToken을 Pi `/v2/me`로 검증하고 세션 토큰 발급 (Pi 공식 데모 표준, `docs/PI_STANDARD.md`) |
 | `GET /api/me` | 현재 로그인 사용자 |
 | `GET/POST /api/listings`, `GET /api/listings/[id]` | 판매글 조회 / 등록 |
 | `GET/POST /api/orders`, `GET/POST /api/orders/[id]` | 주문 목록 / 주문 생성(결제 데이터 반환) / 발송·구매확정 |
 | `POST /api/payments/approve` | `onReadyForServerApproval` → 결제 내용 검증 후 Pi `/approve` |
 | `POST /api/payments/complete` | `onReadyForServerCompletion` → Pi `/complete`(txid) |
-| `POST /api/payments/cancel` | `onCancel`/`onError` → 주문 취소, 상품 예약 해제 |
+| `POST /api/payments/cancelled_payment` | `onCancel`/`onError` → 주문 취소, 상품 예약 해제 |
 | `POST /api/payments/incomplete` | `onIncompletePaymentFound` → 미완료 결제 마무리 |
 
 ## 결제 흐름 (에스크로)
