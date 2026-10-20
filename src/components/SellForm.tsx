@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
+import FilePicker from "@/components/FilePicker";
 import { api } from "@/lib/client/api";
 import { uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
 import { MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, hasPolicy, pickPolicy, type SellerBusiness, type SellerPolicy } from "@/lib/business";
@@ -63,7 +64,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const { showToast } = useStore();
   const [photos, setPhotos] = useState<string[]>([]);
   const [videos, setVideos] = useState<string[]>([]);
-  const [blobEnabled, setBlobEnabled] = useState(false);
+  const [blobEnabled, setBlobEnabled] = useState<boolean | null>(null);
   const [photoUploads, setPhotoUploads] = useState(0);
   const [videoProgress, setVideoProgress] = useState<number | null>(null);
   const [title, setTitle] = useState("");
@@ -173,16 +174,14 @@ export default function SellForm({ draftId }: { draftId?: string }) {
 
   const uploading = photoUploads > 0 || videoProgress !== null;
 
-  const addPhotos = async (files: FileList | null) => {
-    if (!files) return;
-    const all = Array.from(files);
+  const addPhotos = async (all: File[]) => {
     const picked = all.slice(0, Math.max(0, MAX_PHOTOS - photos.length - photoUploads));
     if (picked.length < all.length) showToast(`사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`);
     if (!picked.length) return;
     setPhotoUploads((n) => n + picked.length);
     const results = await Promise.allSettled(
       picked.map((f) =>
-        preparePhoto(f, blobEnabled).finally(() => setPhotoUploads((n) => n - 1)),
+        preparePhoto(f, blobEnabled === true).finally(() => setPhotoUploads((n) => n - 1)),
       ),
     );
     const urls = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
@@ -284,7 +283,13 @@ export default function SellForm({ draftId }: { draftId?: string }) {
       <div>
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {photos.length + photoUploads < MAX_PHOTOS && (
-            <label className="tap relative flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 text-gray-400">
+            <FilePicker
+              label="사진 추가"
+              accept="image/*"
+              multiple
+              onFiles={(f) => void addPhotos(f)}
+              className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 text-gray-400"
+            >
               <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
                 <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
                 <circle cx="12" cy="13" r="3.5" />
@@ -292,22 +297,22 @@ export default function SellForm({ draftId }: { draftId?: string }) {
               <span className="text-[11px] font-medium">
                 {photos.length}/{MAX_PHOTOS}
               </span>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="sr-only"
-                aria-label="사진 추가"
-                onChange={(e) => {
-                  void addPhotos(e.target.files);
-                  e.target.value = "";
-                }}
-              />
-            </label>
+            </FilePicker>
           )}
           {videos.length < MAX_VIDEOS && videoProgress === null && (
-            <label
-              className={`relative flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed text-gray-400 ${blobEnabled ? "tap border-gray-300" : "border-gray-200 opacity-50"}`}
+            <FilePicker
+              label="동영상 추가"
+              accept="video/*"
+              blocked={blobEnabled !== true}
+              onBlocked={() =>
+                showToast(
+                  blobEnabled === null
+                    ? "업로드를 준비하고 있어요. 잠시 후 다시 눌러 주세요."
+                    : "동영상 저장소가 연결되지 않아 지금은 올릴 수 없어요.",
+                )
+              }
+              onFiles={(f) => void addVideo(f[0])}
+              className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 text-gray-400"
             >
               <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
                 <rect x="3" y="6" width="13" height="12" rx="2" />
@@ -316,18 +321,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
               <span className="text-[11px] font-medium">
                 동영상 {videos.length}/{MAX_VIDEOS}
               </span>
-              <input
-                type="file"
-                accept="video/*"
-                disabled={!blobEnabled}
-                className="sr-only"
-                aria-label="동영상 추가"
-                onChange={(e) => {
-                  void addVideo(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-            </label>
+            </FilePicker>
           )}
           {videoProgress !== null && (
             <div className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl bg-gray-100 text-[11px] font-bold text-gray-500">
