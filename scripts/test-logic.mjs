@@ -112,6 +112,22 @@ test("옵션 조합별 재고: 품절 조합만 막히고 재입고 시 복구",
   await buy(b2, l.id, { 사이즈: "M", 색상: "블랙" });
 });
 
+test("옵션 확장: 최대 5개 그룹·100개 조합, 초과 시 400", async () => {
+  const opt = (name, n) => ({ name, values: Array.from({ length: n }, (_, i) => `${name}${i}`) });
+  const five = ["색상", "사이즈", "핏", "소재", "구성"].map((n) => opt(n, 2));
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "5옵션", options: five, variants: [{ options: Object.fromEntries(five.map((o) => [o.name, o.values[1]])), stock: 4 }] }, seller);
+  assert.equal(l.options.length, 5);
+  assert.equal(l.variants.length, 32);
+  assert.equal(l.stock, 4);
+  assert.equal((await call("/api/listings", { ...newBase, title: "6옵션", options: [...five, opt("맛", 1)], variants: [] }, seller)).status, 400);
+  const { listing: big } = await ok("/api/listings", { ...newBase, title: "100조합", options: [opt("저장용량", 10), opt("색상", 10)], variants: [{ options: { 저장용량: "저장용량0", 색상: "색상9" }, stock: 1 }] }, seller);
+  assert.equal(big.variants.length, 100);
+  assert.equal((await call("/api/listings", { ...newBase, title: "125조합", options: [opt("a", 5), opt("b", 5), opt("c", 5)], variants: [] }, seller)).status, 400);
+  const o = opt("호수", 25);
+  const { listing: many } = await ok("/api/listings", { ...newBase, title: "20값", options: [o], variants: [{ options: { 호수: "호수0" }, stock: 1 }] }, seller);
+  assert.equal(many.options[0].values.length, 20);
+});
+
 test("임시저장: 비공개, 이어서 작성 후 게시", async () => {
   const title = `임시저장 ${run}`;
   const { listing: d } = await ok("/api/listings", { title, draft: true, condition: "used" }, seller);

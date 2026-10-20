@@ -6,11 +6,10 @@ import { api } from "@/lib/client/api";
 import { uploadMedia, videoDuration } from "@/lib/client/media";
 import { listingCategories } from "@/lib/categories";
 import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
+import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS, optionPresetsFor, presetValuesFor, type OptionPreset } from "@/lib/options";
 import { usageGradeLabel, type Condition, type Listing, type TradeMethod, type UsageGrade } from "@/lib/types";
 import { useStore } from "./store/StoreProvider";
 
-const MAX_OPTIONS = 3;
-const MAX_VARIANTS = 50;
 
 const comboKey = (c: Record<string, string>) => JSON.stringify(c);
 /** Shopify처럼 옵션 값의 모든 조합(variant)을 만든다. 서버(listing-input.ts)와 같은 순서 */
@@ -19,17 +18,7 @@ const cartesian = (opts: { name: string; values: string[] }[]) =>
 
 type OptionDraft = { name: string; values: string };
 
-/** 카테고리별 기본 옵션(새 상품): 첫 옵션 추가 시 채워 넣는다. */
-const optionPreset: Record<string, OptionDraft> = {
-  fashion: { name: "사이즈", values: "S, M, L, XL" },
-  fresh: { name: "중량", values: "1kg, 2kg, 5kg" },
-  beauty: { name: "용량", values: "30ml, 50ml" },
-  digital: { name: "색상", values: "블랙, 화이트" },
-  baby: { name: "연령", values: "0~12개월, 1~3세" },
-  sports: { name: "사이즈", values: "S, M, L" },
-  pet: { name: "중량", values: "500g, 1kg" },
-};
-const defaultPreset: OptionDraft = { name: "색상", values: "블랙, 화이트" };
+const splitValues = (v: string) => [...new Set(v.split(",").map((x) => x.trim()).filter(Boolean))].slice(0, MAX_OPTION_VALUES);
 
 const saleKinds = [
   { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
@@ -84,6 +73,8 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const [stock, setStock] = useState("10");
   const [options, setOptions] = useState<OptionDraft[]>([]);
   const [variantStock, setVariantStock] = useState<Record<string, string>>({});
+  const [bulkTarget, setBulkTarget] = useState("");
+  const [bulkQty, setBulkQty] = useState("");
   const [loading, setLoading] = useState(Boolean(draftId));
 
   useEffect(() => {
@@ -132,18 +123,40 @@ export default function SellForm({ draftId }: { draftId?: string }) {
 
   const priceNum = Number(price);
   const isNew = kind === "new";
-  const preset = optionPreset[category] ?? defaultPreset;
+  const presets = optionPresetsFor(category);
+  const suggestedGroups = presets.filter((p) => !options.some((o) => o.name.trim() === p.name));
+  const categoryName = listingCategories.find((c) => c.id === category)?.name;
   const parsedOptions = options
-    .map((o) => ({ name: o.name.trim(), values: [...new Set(o.values.split(",").map((v) => v.trim()).filter(Boolean))] }))
+    .map((o) => ({ name: o.name.trim(), values: splitValues(o.values) }))
     .filter((o) => o.name || o.values.length);
   const optionsValid = parsedOptions.every((o) => o.name && o.values.length > 0);
   const combos = isNew && optionsValid && parsedOptions.length ? cartesian(parsedOptions) : [];
-  const variantTotal = combos.reduce((sum, c) => sum + (Number(variantStock[comboKey(c)]) || 0), 0);
+  const stockOf = (c: Record<string, string>) => Number(variantStock[comboKey(c)]) || 0;
+  const variantTotal = combos.reduce((sum, c) => sum + stockOf(c), 0);
+  const soldOutCount = combos.filter((c) => stockOf(c) === 0).length;
+  // 옵션이 2개 이상이면 첫 옵션 값으로 묶어서 보여준다(예: 블랙 › S/M/L)
+  const groupBy = parsedOptions.length > 1 ? parsedOptions[0] : null;
+  const variantGroups = groupBy ? groupBy.values.map((v) => ({ value: v, items: combos.filter((c) => c[groupBy.name] === v) })) : [{ value: "", items: combos }];
+  const bulkQtyValid = /^\d{1,4}$/.test(bulkQty);
   const stockNum = Number(stock);
   const stockValid = Number.isInteger(stockNum) && stockNum >= 1 && stockNum <= 9999;
   const valid =
     title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0 && (!isNew || (optionsValid && (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid)));
   const updateOption = (i: number, patch: Partial<OptionDraft>) => setOptions((cur) => cur.map((o, j) => (j === i ? { ...o, ...patch } : o)));
+
+  const addOptionGroup = (p?: OptionPreset) =>
+    setOptions((cur) => (cur.length >= MAX_OPTIONS ? cur : [...cur, p ? { name: p.name, values: p.values.join(", ") } : { name: "", values: "" }]));
+  const appendValue = (i: number, v: string) =>
+    setOptions((cur) => cur.map((o, j) => (j !== i ? o : { ...o, values: o.values.trim() ? `${o.values.replace(/[,\s]+$/, "")}, ${v}` : v })));
+  const applyBulk = () => {
+    if (!bulkQtyValid) return;
+    const target = bulkTarget ? (JSON.parse(bulkTarget) as [string, string]) : null;
+    setVariantStock((cur) => {
+      const next = { ...cur };
+      for (const c of combos) if (!target || c[target[0]] === target[1]) next[comboKey(c)] = String(Number(bulkQty));
+      return next;
+    });
+  };
 
   const toggleMethod = (m: TradeMethod) => setMethods((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
 
@@ -434,80 +447,162 @@ export default function SellForm({ draftId }: { draftId?: string }) {
             <legend className={label}>
               옵션 <span className="text-xs font-normal text-gray-400">(선택 · 최대 {MAX_OPTIONS}개)</span>
             </legend>
-            <div className="space-y-2">
-              {options.map((o, i) => (
-                <div key={i} className="flex gap-2">
-                  <input
-                    aria-label={`옵션 ${i + 1} 이름`}
-                    value={o.name}
-                    onChange={(e) => updateOption(i, { name: e.target.value })}
-                    maxLength={10}
-                    placeholder={preset.name}
-                    className={`${field} w-24 shrink-0`}
-                  />
-                  <input
-                    aria-label={`옵션 ${i + 1} 값`}
-                    value={o.values}
-                    onChange={(e) => updateOption(i, { values: e.target.value })}
-                    placeholder={preset.values}
-                    className={`${field} min-w-0 flex-1`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setOptions((cur) => cur.filter((_, j) => j !== i))}
-                    aria-label={`옵션 ${i + 1} 삭제`}
-                    className="tap shrink-0 px-1 text-lg text-gray-400"
-                  >
-                    ×
-                  </button>
+            {suggestedGroups.length > 0 && options.length < MAX_OPTIONS && (
+              <div className="mb-2">
+                <p className="mb-1 text-[11px] text-gray-500">{categoryName ? `${categoryName} 추천 옵션` : "추천 옵션"} · 탭하면 기본 값과 함께 추가돼요</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestedGroups.map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => addOptionGroup(p)}
+                      className="tap rounded-full border border-pi/30 bg-pi/5 px-3 py-1 text-xs font-bold text-pi"
+                    >
+                      + {p.name}
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+            <div className="space-y-2">
+              {options.map((o, i) => {
+                const vals = splitValues(o.values);
+                const quick = presetValuesFor(category, o.name).filter((v) => !vals.includes(v));
+                return (
+                  <div key={i} className="rounded-lg border border-gray-200 p-2">
+                    <div className="flex gap-2">
+                      <input
+                        aria-label={`옵션 ${i + 1} 이름`}
+                        value={o.name}
+                        onChange={(e) => updateOption(i, { name: e.target.value })}
+                        maxLength={10}
+                        placeholder="옵션명"
+                        className={`${field} w-24 shrink-0`}
+                      />
+                      <input
+                        aria-label={`옵션 ${i + 1} 값`}
+                        value={o.values}
+                        onChange={(e) => updateOption(i, { values: e.target.value })}
+                        placeholder="값1, 값2"
+                        className={`${field} min-w-0 flex-1`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setOptions((cur) => cur.filter((_, j) => j !== i))}
+                        aria-label={`옵션 ${i + 1} 삭제`}
+                        className="tap shrink-0 px-1 text-lg text-gray-400"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    {quick.length > 0 && vals.length < MAX_OPTION_VALUES && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {quick.map((v) => (
+                          <button key={v} type="button" onClick={() => appendValue(i, v)} className="tap rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
+                            + {v}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {options.length < MAX_OPTIONS && (
               <button
                 type="button"
-                onClick={() => setOptions((cur) => [...cur, cur.length === 0 ? { ...preset } : { name: "", values: "" }])}
+                onClick={() => addOptionGroup()}
                 className="tap mt-2 w-full rounded-lg border border-dashed border-gray-300 py-2 text-xs font-bold text-gray-600"
               >
-                + 옵션 추가{options.length === 0 && category ? ` (예: ${preset.name})` : ""}
+                + 직접 옵션 추가
               </button>
             )}
-            <p className="mt-1.5 text-[11px] text-gray-500">옵션 값은 쉼표(,)로 구분해요. 구매자는 결제 전에 옵션을 골라요.</p>
+            <p className="mt-1.5 text-[11px] text-gray-500">옵션 값은 쉼표(,)로 구분해요(옵션당 최대 {MAX_OPTION_VALUES}개). 구매자는 결제 전에 옵션을 골라요.</p>
           </fieldset>
           {combos.length > 0 && (
             <div>
               <p className={label}>
                 옵션별 재고 <span className="text-red-500">*</span>{" "}
-                <span className="text-xs font-normal text-gray-500">총 {variantTotal}개</span>
+                <span className="text-xs font-normal text-gray-500">
+                  조합 {combos.length}개 · 총 {variantTotal}개{soldOutCount ? ` · 품절 ${soldOutCount}개` : ""}
+                </span>
               </p>
               {combos.length > MAX_VARIANTS ? (
                 <p className="text-xs text-red-500">
                   옵션 조합이 {combos.length}개예요. 최대 {MAX_VARIANTS}개까지 만들 수 있어요.
                 </p>
               ) : (
-                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
-                  {combos.map((c) => {
-                    const k = comboKey(c);
-                    const name = Object.values(c).join(" / ");
-                    return (
-                      <li key={k} className="flex items-center gap-2 px-3 py-2">
-                        <span className="flex-1 text-sm text-gray-800">{name}</span>
-                        <input
-                          aria-label={`${name} 재고`}
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={9999}
-                          value={variantStock[k] ?? ""}
-                          onChange={(e) => setVariantStock((cur) => ({ ...cur, [k]: e.target.value }))}
-                          placeholder="0"
-                          className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-right text-sm focus:border-pi focus:outline-none"
-                        />
-                        <span className="text-xs text-gray-500">개</span>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  <div className="mb-2 flex gap-2 rounded-lg bg-gray-50 p-2">
+                    <select
+                      aria-label="일괄 입력 대상"
+                      value={bulkTarget}
+                      onChange={(e) => setBulkTarget(e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                    >
+                      <option value="">전체 조합</option>
+                      {parsedOptions.flatMap((o) =>
+                        o.values.map((v) => (
+                          <option key={`${o.name}:${v}`} value={JSON.stringify([o.name, v])}>
+                            {o.name}: {v}
+                          </option>
+                        )),
+                      )}
+                    </select>
+                    <input
+                      aria-label="일괄 재고 수량"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={9999}
+                      value={bulkQty}
+                      onChange={(e) => setBulkQty(e.target.value)}
+                      placeholder="수량"
+                      className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-right text-xs"
+                    />
+                    <button type="button" onClick={applyBulk} disabled={!bulkQtyValid} className="tap rounded-lg bg-gray-800 px-3 text-xs font-bold text-white disabled:opacity-40">
+                      일괄 적용
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {variantGroups.map((g) => (
+                      <div key={g.value || "all"} className="overflow-hidden rounded-lg border border-gray-200">
+                        {groupBy && (
+                          <p className="flex justify-between bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-700">
+                            <span>
+                              {groupBy.name}: {g.value}
+                            </span>
+                            <span className="font-normal text-gray-500">{g.items.reduce((n, c) => n + stockOf(c), 0)}개</span>
+                          </p>
+                        )}
+                        <ul className="divide-y divide-gray-100">
+                          {g.items.map((c) => {
+                            const k = comboKey(c);
+                            const name = Object.values(c).join(" / ");
+                            const shown = groupBy ? Object.entries(c).filter(([n]) => n !== groupBy.name).map(([, v]) => v).join(" / ") : name;
+                            return (
+                              <li key={k} className="flex items-center gap-2 px-3 py-2">
+                                <span className={`flex-1 text-sm ${stockOf(c) ? "text-gray-800" : "text-gray-400"}`}>{shown}</span>
+                                <input
+                                aria-label={`${name} 재고`}
+                                type="number"
+                                inputMode="numeric"
+                                min={0}
+                                max={9999}
+                                value={variantStock[k] ?? ""}
+                                onChange={(e) => setVariantStock((cur) => ({ ...cur, [k]: e.target.value }))}
+                                placeholder="0"
+                                className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-right text-sm focus:border-pi focus:outline-none"
+                            />
+                                <span className="text-xs text-gray-500">개</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               <p className="mt-1.5 text-[11px] text-gray-500">조합별로 재고를 따로 관리해요. 0개인 조합은 구매자에게 품절로 보여요.</p>
             </div>

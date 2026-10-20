@@ -1,14 +1,12 @@
 import { isListingCategory } from "@/lib/categories";
 import { isUsageGrade, type Listing, type ListingOption, type TradeMethod, type Variant } from "@/lib/types";
 import { isBlobUrl, MAX_PHOTOS, MAX_VIDEOS } from "@/lib/media";
+import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS } from "@/lib/options";
 import { HttpError } from "./http";
 
 /** Blob 미연결 시 사진은 data URL로 저장된다. Vercel 함수 요청 한도(4.5MB) 아래로 묶는다. */
 const MAX_IMAGE_CHARS = 400_000;
 const MAX_INLINE_TOTAL_CHARS = 3_000_000;
-const MAX_OPTIONS = 3;
-const MAX_OPTION_VALUES = 10;
-export const MAX_VARIANTS = 50;
 
 export type ListingInput = Partial<{
   title: string;
