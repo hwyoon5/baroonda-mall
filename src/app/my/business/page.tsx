@@ -2,15 +2,29 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
+import ShippingTermsFields from "@/components/ShippingTermsFields";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useStore } from "@/components/store/StoreProvider";
 import { useAuth } from "@/hooks/useAuth";
-import { formatBizRegNo, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, type SellerBusiness } from "@/lib/business";
+import { DEFAULT_POLICY, MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, normalizeShipping, toShippingDraft, type SellerBusiness, type ShippingDraft } from "@/lib/business";
 import { api } from "@/lib/client/api";
 
-type Form = { bizName: string; ownerName: string; bizRegNo: string; mailOrderNo: string; mailOrderExempt: boolean; address: string; phone: string; email: string };
-const empty: Form = { bizName: "", ownerName: "", bizRegNo: "", mailOrderNo: "", mailOrderExempt: false, address: "", phone: "", email: "" };
+type Form = {
+  bizName: string;
+  ownerName: string;
+  bizRegNo: string;
+  mailOrderNo: string;
+  mailOrderExempt: boolean;
+  address: string;
+  phone: string;
+  email: string;
+  returnPolicy: string;
+  shippingInfo: string;
+  legalNotice: string;
+  shipping: ShippingDraft;
+};
+const empty: Form = { bizName: "", ownerName: "", bizRegNo: "", mailOrderNo: "", mailOrderExempt: false, address: "", phone: "", email: "", returnPolicy: "", shippingInfo: "", legalNotice: "", shipping: toShippingDraft() };
 
 const field = "w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-pi focus:outline-none";
 
@@ -31,7 +45,16 @@ export default function BusinessPage() {
     api<{ business: SellerBusiness | null }>("/api/me/business")
       .then(({ business: b }) => {
         if (b) {
-          setF({ ...b, bizRegNo: formatBizRegNo(b.bizRegNo), mailOrderNo: b.mailOrderNo ?? "", email: b.email ?? "" });
+          setF({
+            ...b,
+            bizRegNo: formatBizRegNo(b.bizRegNo),
+            mailOrderNo: b.mailOrderNo ?? "",
+            email: b.email ?? "",
+            returnPolicy: b.returnPolicy ?? "",
+            shippingInfo: b.shippingInfo ?? "",
+            legalNotice: b.legalNotice ?? "",
+            shipping: toShippingDraft(b.shipping),
+          });
           setSaved(true);
         }
       })
@@ -53,7 +76,8 @@ export default function BusinessPage() {
     (f.mailOrderExempt || isMailOrderNo(f.mailOrderNo)) &&
     f.address.trim().length >= 5 &&
     isBizPhone(f.phone) &&
-    (!f.email || isEmail(f.email));
+    (!f.email || isEmail(f.email)) &&
+    !normalizeShipping(f.shipping).error;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -107,6 +131,47 @@ export default function BusinessPage() {
           {row("address", "사업장 주소", { maxLength: 120, placeholder: "사업자등록증의 사업장 주소" })}
           {row("phone", "고객센터 전화번호", { inputMode: "tel", maxLength: 20, placeholder: "예: 02-123-4567" })}
           {row("email", "이메일", { inputMode: "email", maxLength: 80, placeholder: "선택" }, false)}
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <h2 className="text-sm font-bold text-gray-900">배송·반품 조건</h2>
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              여기 입력한 조건은 새 상품을 등록할 때 자동으로 불러와져 상품 상세에 표로 표시돼요. 상품마다 다르면 상품 등록 화면에서 고칠 수 있어요.
+            </p>
+            <ShippingTermsFields idPrefix={`${id}-ship`} value={f.shipping} onChange={(shipping) => set({ shipping })} />
+          </div>
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-gray-900">반품·교환·법적 고지</h2>
+              <button
+                type="button"
+                onClick={() => set(Object.fromEntries(POLICY_FIELDS.map(({ key }) => [key, f[key].trim() ? f[key] : DEFAULT_POLICY[key]])))}
+                className="tap rounded-lg border border-pi/30 px-2.5 py-1 text-xs font-bold text-pi"
+              >
+                빈 칸에 기본 문구 넣기
+              </button>
+            </div>
+            <p className="text-[11px] leading-relaxed text-gray-500">
+              여기 저장한 내용은 새 상품 상세 하단에 자동으로 표시돼요. 상품마다 다르게 쓰고 싶으면 상품 등록 화면에서 불러와 고칠 수 있어요.
+            </p>
+            {POLICY_FIELDS.map(({ key, label }) => (
+              <div key={key}>
+                <label htmlFor={`${id}-${key}`} className="mb-1.5 flex justify-between text-sm font-bold text-gray-900">
+                  {label}
+                  <span className="text-[11px] font-normal text-gray-400">
+                    {f[key].length}/{MAX_POLICY_CHARS}
+                  </span>
+                </label>
+                <textarea
+                  id={`${id}-${key}`}
+                  value={f[key]}
+                  onChange={(e) => set({ [key]: e.target.value })}
+                  maxLength={MAX_POLICY_CHARS}
+                  rows={4}
+                  placeholder="선택 · [빈 칸에 기본 문구 넣기]로 예시 문구를 채울 수 있어요."
+                  className={`${field} resize-y`}
+                />
+              </div>
+            ))}
+          </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button type="submit" disabled={!valid || busy} className="tap w-full rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400">
             {busy ? "저장 중…" : saved ? "수정 내용 저장" : "사업자 정보 등록"}

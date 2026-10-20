@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import FilePicker from "@/components/FilePicker";
+import ShippingTable from "@/components/ShippingTable";
+import ShippingTermsFields from "@/components/ShippingTermsFields";
 import { api } from "@/lib/client/api";
 import { uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
-import { formatBizRegNo, type SellerBusiness } from "@/lib/business";
+import { MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, hasPolicy, hasShipping, pickPolicy, toShippingDraft, type SellerBusiness, type SellerPolicy } from "@/lib/business";
 import { listingCategories } from "@/lib/categories";
 import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS, optionPresetsFor, presetValuesFor, type OptionPreset } from "@/lib/options";
@@ -80,6 +82,9 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const [bulkQty, setBulkQty] = useState("");
   const [loading, setLoading] = useState(Boolean(draftId));
   const [business, setBusiness] = useState<SellerBusiness | null | undefined>(undefined);
+  const [customPolicy, setCustomPolicy] = useState(false);
+  const [policy, setPolicy] = useState<SellerPolicy>({});
+  const [shipDraft, setShipDraft] = useState(() => toShippingDraft());
 
   useEffect(() => {
     api<{ enabled: boolean }>("/api/upload")
@@ -114,6 +119,9 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         if (l.stock) setStock(String(l.stock));
         setOptions((l.options ?? []).map((o) => ({ name: o.name, values: o.values.join(", ") })));
         setVariantStock(Object.fromEntries((l.variants ?? []).map((v) => [comboKey(v.options), String(v.stock)])));
+        setCustomPolicy(hasPolicy(l.policy));
+        setPolicy(l.policy ?? {});
+        setShipDraft(toShippingDraft(l.policy?.shipping));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "임시저장 상품을 불러오지 못했어요."))
       .finally(() => setLoading(false));
@@ -231,6 +239,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         description,
         images: photos,
         videos,
+        policy: isNew && customPolicy ? { ...policy, shipping: shipDraft } : null,
       };
       const { listing } = draftId
         ? await api<{ listing: Listing }>(`/api/listings/${draftId}`, body, "PUT")
@@ -746,14 +755,90 @@ export default function SellForm({ draftId }: { draftId?: string }) {
             </Link>
           </div>
         ) : business ? (
-          <p className="flex items-center justify-between rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
-            <span>
-              판매자 정보: <b className="text-gray-800">{business.bizName}</b> · {formatBizRegNo(business.bizRegNo)}
-            </span>
-            <Link href="/my/business?next=/sell" className="tap font-bold text-pi">
-              수정
-            </Link>
-          </p>
+          <>
+            <p className="flex items-center justify-between rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+              <span>
+                판매자 정보: <b className="text-gray-800">{business.bizName}</b> · {formatBizRegNo(business.bizRegNo)}
+              </span>
+              <Link href="/my/business?next=/sell" className="tap font-bold text-pi">
+                수정
+              </Link>
+            </p>
+            <div>
+              <p className={label}>반품·환불·법적 고지</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { on: !customPolicy, t: "내 기본 규정 자동 표시", d: "사업자 정보에 저장한 내용" },
+                  { on: customPolicy, t: "이 상품만 따로 작성", d: "불러와서 고쳐 쓰기" },
+                ].map((o, i) => (
+                  <button
+                    key={o.t}
+                    type="button"
+                    aria-pressed={o.on}
+                    onClick={() => setCustomPolicy(i === 1)}
+                    className={`tap rounded-lg border p-2 text-left ${o.on ? "border-pi bg-violet-50" : "border-gray-200"}`}
+                  >
+                    <span className={`block text-xs font-bold ${o.on ? "text-pi" : "text-gray-700"}`}>{o.t}</span>
+                    <span className="text-[10px] text-gray-400">{o.d}</span>
+                  </button>
+                ))}
+              </div>
+              {!customPolicy ? (
+                hasPolicy(business) ? (
+                  <div className="mt-2 space-y-2 rounded-lg bg-gray-50 p-3">
+                  <p className="text-[11px] leading-relaxed text-gray-600">
+                    상품 상세 하단에{" "}
+                    {[...POLICY_FIELDS.filter((f) => business[f.key]?.trim()).map((f) => f.label), ...(hasShipping(business.shipping) ? ["배송·반품 조건"] : [])]
+                      .map((l) => `‘${l}’`)
+                      .join(", ")}
+                    이 자동으로 표시돼요. 사업자 정보에서 고치면 이 상품에도 바로 반영돼요.
+                  </p>
+                  {business.shipping && <ShippingTable terms={business.shipping} />}
+                  </div>
+                ) : (
+                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-800">
+                    아직 저장한 반품·환불 규정이 없어요.{" "}
+                    <Link href="/my/business?next=/sell" className="font-bold underline">
+                      사업자 정보
+                    </Link>
+                    에서 등록하면 모든 새 상품에 자동으로 표시돼요.
+                  </p>
+                )
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <button
+                    type="button"
+                    disabled={!hasPolicy(business)}
+                    onClick={() => {
+                      setPolicy(pickPolicy(business));
+                      setShipDraft(toShippingDraft(business.shipping));
+                    }}
+                    className="tap w-full rounded-lg border border-pi/30 py-2 text-xs font-bold text-pi disabled:border-gray-200 disabled:text-gray-400"
+                  >
+                    {hasPolicy(business) ? "내 규정 불러오기" : "불러올 규정이 없어요(사업자 정보에서 먼저 등록)"}
+                  </button>
+                  {POLICY_FIELDS.map(({ key, label: l }) => (
+                    <div key={key}>
+                      <label htmlFor={`${id}-${key}`} className="mb-1 block text-xs font-bold text-gray-700">
+                        {l}
+                      </label>
+                      <textarea
+                        id={`${id}-${key}`}
+                        value={policy[key] ?? ""}
+                        onChange={(e) => setPolicy((cur) => ({ ...cur, [key]: e.target.value }))}
+                        maxLength={MAX_POLICY_CHARS}
+                        rows={3}
+                        className={`${input} resize-y`}
+                      />
+                    </div>
+                  ))}
+                  <p className="pt-1 text-xs font-bold text-gray-700">배송·반품 조건</p>
+                  <ShippingTermsFields idPrefix={`${id}-ship`} value={shipDraft} onChange={setShipDraft} />
+                  <p className="text-[11px] text-gray-400">모두 비워 두면 내 기본 규정이 표시돼요.</p>
+                </div>
+              )}
+            </div>
+          </>
         ) : null)}
 
       <p className="rounded-lg bg-violet-50 p-3 text-xs leading-relaxed text-pi">
