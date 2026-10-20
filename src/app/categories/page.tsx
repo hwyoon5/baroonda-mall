@@ -11,7 +11,8 @@ export default function CategoriesPage() {
         {items.map((c) => (
           <li key={c.id}>
             <Link href={c.href} className="tap flex items-center gap-3 px-4 py-3.5">
-              <span className={`flex h-11 w-11 items-center justify-center rounded-2xl text-2xl ${c.bg}`}>{c.icon}</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={c.image} alt="" width={48} height={48} className={`h-12 w-12 rounded-2xl object-cover ring-1 ring-black/5 ${c.bg}`} />
               <span className="flex-1 text-sm font-semibold text-gray-900">{c.name}</span>
               {c.id !== "used" && <span className="text-xs text-gray-400">{productsInCategory(c.id).length}개</span>}
               {c.badge && <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{c.badge}</span>}

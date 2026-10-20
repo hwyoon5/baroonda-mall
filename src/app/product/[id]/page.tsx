@@ -20,7 +20,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <SubHeader title={p.name} />
-      <div className={`flex aspect-square items-center justify-center text-[9rem] ${p.bg}`}>{p.emoji}</div>
+      <div className={`aspect-square overflow-hidden ${p.bg}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
+      </div>
 
       <section className="bg-white px-4 py-4">
         {category && (

@@ -9,7 +9,10 @@ export default function ProductCard({ product: p }: { product: Product }) {
   return (
     <div className="relative">
       <Link href={`/product/${p.id}`} className="tap block">
-        <div className={`flex aspect-square items-center justify-center rounded-xl text-7xl ${p.bg}`}>{p.emoji}</div>
+        <div className={`aspect-square overflow-hidden rounded-xl ${p.bg}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={p.image} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+        </div>
 
         <div className="mt-2 flex flex-wrap gap-1">
           {p.fastDelivery && <FastDeliveryTag compact />}

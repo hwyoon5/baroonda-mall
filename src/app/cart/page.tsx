@@ -28,8 +28,9 @@ export default function CartPage() {
           <ul className="divide-y divide-gray-100 bg-white">
             {lines.map(({ product: p, qty }) => (
               <li key={p!.id} className="flex gap-3 px-4 py-3">
-                <Link href={`/product/${p!.id}`} className={`tap flex h-20 w-20 shrink-0 items-center justify-center rounded-xl text-4xl ${p!.bg}`}>
-                  {p!.emoji}
+                <Link href={`/product/${p!.id}`} className={`tap block h-20 w-20 shrink-0 overflow-hidden rounded-xl ${p!.bg}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p!.image} alt="" className="h-full w-full object-cover" />
                 </Link>
                 <div className="flex flex-1 flex-col">
                   <Link href={`/product/${p!.id}`} className="line-clamp-2 text-sm text-gray-900">

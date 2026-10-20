@@ -24,8 +24,9 @@ export default function TodayDeals() {
           return (
             <li key={d.id} className="w-36 shrink-0 snap-start">
               <Link href={`/product/${d.id}`} className="tap block">
-                <div className={`relative flex aspect-square items-center justify-center rounded-xl bg-gradient-to-br text-6xl ${d.gradient}`}>
-                  {d.emoji}
+                <div className={`relative aspect-square overflow-hidden rounded-xl bg-gradient-to-br ${d.gradient}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={d.image} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                   <span className="absolute left-0 top-0 rounded-br-xl rounded-tl-xl bg-red-500 px-2 py-1 text-xs font-extrabold text-white">
                     {rate}%
                   </span>

@@ -16,7 +16,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ id: s
   return (
     <>
       <SubHeader title={category.name} />
-      <ProductGrid title={`${category.icon} ${category.name} ${items.length}개`} items={items} emptyText="준비 중인 상품이에요." />
+      <ProductGrid title={`${category.name} ${items.length}개`} items={items} emptyText="준비 중인 상품이에요." />
     </>
   );
 }
