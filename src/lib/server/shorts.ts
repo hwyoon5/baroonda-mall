@@ -12,6 +12,13 @@ export function parseCaption(v: unknown) {
   return caption;
 }
 
+/** 대표 이미지는 /api/upload로 올린 Blob 사진만. 빈 값·null은 없음. */
+export function parsePosterUrl(v: unknown) {
+  if (v === undefined || v === null || v === "") return undefined;
+  if (!isBlobUrl(v, "photo")) throw new HttpError(400, "대표 이미지 주소가 올바르지 않아요.");
+  return v;
+}
+
 /** 연결 상품은 내가 올린 공개 상품만 허용. 빈 값·null은 연결 해제. */
 export async function ownListingId(uid: string, listingId: unknown) {
   if (listingId === undefined || listingId === null || listingId === "") return undefined;

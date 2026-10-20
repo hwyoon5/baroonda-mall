@@ -7,10 +7,12 @@ import LoginCard from "@/components/pi/LoginCard";
 import { useStore } from "@/components/store/StoreProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/client/api";
-import { inspectVideo, uploadMedia, videoExt } from "@/lib/client/media";
+import { inspectVideo, posterFromUrl, uploadMedia, videoExt } from "@/lib/client/media";
 import { MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, VIDEO_TYPES } from "@/lib/media";
 import { MAX_SHORT_CAPTION, MAX_SHORTS_PER_USER } from "@/lib/shorts";
 import type { Listing, ShortView } from "@/lib/types";
+
+const BUILD = (process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7);
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
@@ -29,6 +31,8 @@ export default function MyShortsPage() {
   const [listingId, setListingId] = useState("");
   const [busy, setBusy] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const posterTried = useRef(new Set<string>());
+  const [posterFailed, setPosterFailed] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     if (!user) return;
@@ -44,6 +48,25 @@ export default function MyShortsPage() {
   }, [user]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // 대표 이미지 없이 올라간 쇼츠는 한 번에 하나씩 프레임을 떠서 저장한다(목록·피드 미리보기용).
+  useEffect(() => {
+    if (!blobEnabled || phase !== "idle" || !shorts) return;
+    const next = shorts.find((s) => !s.posterUrl && !posterTried.current.has(s.id));
+    if (!next) return;
+    posterTried.current.add(next.id);
+    void (async () => {
+      try {
+        const blob = await posterFromUrl(next.videoUrl);
+        if (!blob) throw new Error("no frame");
+        const posterUrl = await uploadMedia(blob, "photo", "jpg");
+        const { short } = await api<{ short: ShortView }>(`/api/shorts/${next.id}`, { posterUrl }, "PATCH");
+        setShorts((cur) => cur?.map((c) => (c.id === short.id ? { ...c, posterUrl: short.posterUrl } : c)) ?? null);
+      } catch {
+        setPosterFailed((f) => new Set(f).add(next.id));
+      }
+    })();
+  }, [shorts, blobEnabled, phase, posterFailed]);
 
   const pick = async (file: File | undefined) => {
     if (!file) return;
@@ -182,10 +205,13 @@ export default function MyShortsPage() {
                 </div>
               </div>
             ) : !videoUrl ? (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <PickButton icon="📹" label="촬영하기" capture blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
-                <PickButton icon="🖼️" label="앨범에서 선택" blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
-              </div>
+              <>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <PickButton icon="📹" label="촬영하기" capture blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
+                  <PickButton icon="🖼️" label="앨범에서 선택" blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
+                </div>
+                <p className="mt-2 text-[11px] text-gray-400">눌러도 선택창이 열리지 않으면 Pi Browser를 완전히 닫았다가 다시 열어 주세요.</p>
+              </>
             ) : (
               <div className="mt-3 space-y-3">
                 <video src={videoUrl} controls playsInline className="mx-auto aspect-[9/16] max-h-80 rounded-xl bg-black" />
@@ -257,10 +283,10 @@ export default function MyShortsPage() {
                       {s.posterUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={s.posterUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      ) : posterFailed.has(s.id) ? (
+                        <video src={`${s.videoUrl}#t=0.5`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
                       ) : (
-                        <span aria-hidden className="flex h-full items-center justify-center text-3xl">
-                          🎬
-                        </span>
+                        <span className="flex h-full items-center justify-center text-[11px] text-white/70">미리보기 준비 중…</span>
                       )}
                       {s.status === "public" ? (
                         <Link href={`/shorts?id=${s.id}`} aria-label="피드에서 보기" className="absolute inset-0" />
@@ -293,13 +319,18 @@ export default function MyShortsPage() {
               </ul>
             )}
           </section>
+          {BUILD && <p className="text-center text-[10px] text-gray-300">버전 {BUILD}</p>}
         </div>
       )}
     </div>
   );
 }
 
-/** 숨긴 file input을 버튼에서 직접 연다. 열기 전에 값을 비워 같은 파일을 다시 골라도 onChange가 오고, 막힌 상태면 이유를 알려 준다. */
+/**
+ * 투명한 file input을 버튼 전체에 덮어, 사용자가 input을 직접 누르게 한다.
+ * (스크립트로 input.click()을 부르는 방식은 일부 모바일 WebView에서 조용히 무시된다.)
+ * 고를 때마다 input을 새로 만들어 같은 파일도 다시 고를 수 있고, 막힌 상태면 이유를 알려 준다.
+ */
 function PickButton({
   icon,
   label,
@@ -315,37 +346,35 @@ function PickButton({
   onBlocked: () => void;
   onPick: (f: File | undefined) => void;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const [gen, setGen] = useState(0);
   return (
-    <div className="relative">
-      <button
-        type="button"
-        aria-disabled={blocked}
-        onClick={() => {
-          const el = ref.current;
-          if (blocked || !el) return onBlocked();
-          el.value = "";
-          el.click();
-        }}
-        className={`tap flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-gray-200 py-5 text-sm font-bold ${blocked ? "opacity-40" : ""}`}
-      >
-        <span className="text-2xl">{icon}</span>
-        {label}
-      </button>
-      <input
-        ref={ref}
-        type="file"
-        accept="video/*"
-        capture={capture ? "environment" : undefined}
-        tabIndex={-1}
-        aria-hidden
-        className="sr-only"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          onPick(f);
-        }}
-      />
-    </div>
+    <label
+      className={`tap relative flex w-full flex-col items-center gap-1 overflow-hidden rounded-xl border-2 border-dashed border-gray-200 py-5 text-sm font-bold ${blocked ? "opacity-40" : ""}`}
+    >
+      <span aria-hidden className="text-2xl">
+        {icon}
+      </span>
+      <span aria-hidden>{label}</span>
+      {blocked ? (
+        <button type="button" aria-label={label} onClick={onBlocked} className="absolute inset-0 z-10" />
+      ) : (
+        <input
+          key={gen}
+          type="file"
+          accept="video/*"
+          capture={capture ? "environment" : undefined}
+          aria-label={label}
+          className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+          onClick={(e) => {
+            e.currentTarget.value = "";
+          }}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            setGen((g) => g + 1);
+            onPick(f);
+          }}
+        />
+      )}
+    </label>
   );
 }
