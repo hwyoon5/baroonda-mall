@@ -1,4 +1,4 @@
-import { digitsOnly, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, normalizeMailOrderNo, type SellerBusiness } from "@/lib/business";
+import { MAX_POLICY_CHARS, digitsOnly, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, normalizeMailOrderNo, type SellerBusiness } from "@/lib/business";
 import { getBusiness } from "./db";
 import { HttpError } from "./http";
 
@@ -32,6 +32,9 @@ export function parseBusinessInput(b: Partial<Record<keyof SellerBusiness, unkno
     address,
     phone,
     email: email || undefined,
+    returnPolicy: str(b.returnPolicy, MAX_POLICY_CHARS) || undefined,
+    shippingInfo: str(b.shippingInfo, MAX_POLICY_CHARS) || undefined,
+    legalNotice: str(b.legalNotice, MAX_POLICY_CHARS) || undefined,
     updatedAt: new Date().toISOString(),
   };
 }

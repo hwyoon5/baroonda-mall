@@ -372,6 +372,35 @@ test("사업자 정보: 검증, 새 상품만 필수(개인 중고·임시저장
   assert.equal((await call("/api/me/business")).status, 401);
 });
 
+test("반품·환불·법적 고지: 사업자 정보에 저장 → 새 상품 상세 자동 표시, 상품별 직접 작성, 개인 중고 제외", async () => {
+  const s = await signin("policy");
+  const pol = { returnPolicy: "수령 후 7일 이내 반품 가능", shippingInfo: "결제 후 2일 내 발송", legalNotice: "분쟁은 소비자분쟁해결기준에 따름" };
+  const { business } = await ok("/api/me/business", { ...biz, ...pol, legalNotice: "  " + pol.legalNotice + "  " }, s, "PUT");
+  assert.equal(business.legalNotice, pol.legalNotice);
+  assert.equal((await ok("/api/me/business", undefined, s)).business.returnPolicy, pol.returnPolicy);
+  assert.equal((await ok("/api/me/business", { ...biz, returnPolicy: "x".repeat(2500) }, s, "PUT")).business.returnPolicy.length, 2000);
+  await ok("/api/me/business", { ...biz, ...pol }, s, "PUT");
+  const html = async (id) => (await (await fetch(`${BASE}/listings/${id}`)).text());
+
+  const { listing: auto } = await ok("/api/listings", { ...newBase, title: "자동 고지", stock: 1 }, s);
+  assert.equal(auto.policy, undefined, "기본 규정은 상품에 복사하지 않고 연동");
+  let h = await html(auto.id);
+  assert.ok(h.includes("반품·환불 규정") && h.includes(pol.returnPolicy) && h.includes(pol.shippingInfo) && h.includes(pol.legalNotice));
+  await ok("/api/me/business", { ...biz, ...pol, returnPolicy: "수정된 반품 규정" }, s, "PUT");
+  assert.ok((await html(auto.id)).includes("수정된 반품 규정"), "사업자 정보 수정이 기존 상품에 반영");
+
+  const { listing: custom } = await ok("/api/listings", { ...newBase, title: "직접 고지", stock: 1, policy: { returnPolicy: "이 상품은 14일 반품", shippingInfo: "", legalNotice: "" } }, s);
+  assert.deepEqual(custom.policy, { returnPolicy: "이 상품은 14일 반품" });
+  h = await html(custom.id);
+  assert.ok(h.includes("이 상품은 14일 반품") && !h.includes("수정된 반품 규정"), "상품별 문구 우선");
+
+  const { listing: blank } = await ok("/api/listings", { ...newBase, title: "빈 고지", stock: 1, policy: { returnPolicy: " " } }, s);
+  assert.equal(blank.policy, undefined, "모두 비우면 기본 규정 사용");
+  const { listing: used } = await ok("/api/listings", { ...newBase, condition: "used", usageGrade: "A", title: "중고 고지", policy: pol }, s);
+  assert.equal(used.policy, undefined);
+  assert.ok(!(await html(used.id)).includes("반품·환불 규정"), "개인 중고는 표시 안 함");
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

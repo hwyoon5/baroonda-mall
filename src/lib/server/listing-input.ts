@@ -2,6 +2,7 @@ import { isListingCategory } from "@/lib/categories";
 import { isUsageGrade, type Listing, type ListingOption, type TradeMethod, type Variant } from "@/lib/types";
 import { isBlobUrl, MAX_PHOTOS, MAX_VIDEOS } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS } from "@/lib/options";
+import { MAX_POLICY_CHARS, hasPolicy } from "@/lib/business";
 import { HttpError } from "./http";
 
 /** Blob 미연결 시 사진은 data URL로 저장된다. Vercel 함수 요청 한도(4.5MB) 아래로 묶는다. */
@@ -27,6 +28,7 @@ export type ListingInput = Partial<{
   variants: unknown;
   usageGrade: string;
   usageNote: string;
+  policy: { returnPolicy?: unknown; shippingInfo?: unknown; legalNotice?: unknown } | null;
   draft: boolean;
 }>;
 
@@ -105,6 +107,12 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
   const videos = b.videos ?? [];
   if (!Array.isArray(videos) || videos.length > MAX_VIDEOS) throw new HttpError(400, `동영상은 최대 ${MAX_VIDEOS}개까지 올릴 수 있어요.`);
   if (!videos.every((src) => isBlobUrl(src, "video"))) throw new HttpError(400, "동영상 형식이 올바르지 않아요.");
+  const rawPolicy = isNew && b.policy && typeof b.policy === "object" ? b.policy : undefined;
+  const policy = rawPolicy && {
+    returnPolicy: str(rawPolicy.returnPolicy, MAX_POLICY_CHARS) || undefined,
+    shippingInfo: str(rawPolicy.shippingInfo, MAX_POLICY_CHARS) || undefined,
+    legalNotice: str(rawPolicy.legalNotice, MAX_POLICY_CHARS) || undefined,
+  };
   const price = pricePi ?? 0;
   return {
     title,
@@ -121,7 +129,7 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
     images,
     videos: videos.length ? videos : undefined,
     ...(isNew
-      ? { stock, committed: 0, soldCount: 0, options, variants }
+      ? { stock, committed: 0, soldCount: 0, options, variants, policy: hasPolicy(policy) ? policy : undefined }
       : { usageGrade: isUsageGrade(b.usageGrade) ? b.usageGrade : undefined, usageNote: str(b.usageNote, 300) || undefined }),
     emoji: "📦",
     bg: "bg-violet-50",
