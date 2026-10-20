@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { api } from "@/lib/client/api";
 import { uploadMedia, videoDuration } from "@/lib/client/media";
+import { formatBizRegNo, type SellerBusiness } from "@/lib/business";
 import { listingCategories } from "@/lib/categories";
 import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS, optionPresetsFor, presetValuesFor, type OptionPreset } from "@/lib/options";
@@ -76,11 +78,15 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const [bulkTarget, setBulkTarget] = useState("");
   const [bulkQty, setBulkQty] = useState("");
   const [loading, setLoading] = useState(Boolean(draftId));
+  const [business, setBusiness] = useState<SellerBusiness | null | undefined>(undefined);
 
   useEffect(() => {
     api<{ enabled: boolean }>("/api/upload")
       .then((r) => setBlobEnabled(r.enabled))
       .catch(() => setBlobEnabled(false));
+    api<{ business: SellerBusiness | null }>("/api/me/business")
+      .then((r) => setBusiness(r.business))
+      .catch(() => setBusiness(null));
   }, []);
 
   // 임시저장한 상품 이어서 작성
@@ -140,7 +146,9 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const bulkQtyValid = /^\d{1,4}$/.test(bulkQty);
   const stockNum = Number(stock);
   const stockValid = Number.isInteger(stockNum) && stockNum >= 1 && stockNum <= 9999;
+  const needsBusiness = isNew && business === null;
   const valid =
+    (!isNew || !!business) &&
     title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0 && (!isNew || (optionsValid && (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid)));
   const updateOption = (i: number, patch: Partial<OptionDraft>) => setOptions((cur) => cur.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
@@ -723,6 +731,26 @@ export default function SellForm({ draftId }: { draftId?: string }) {
           className={`${input} resize-none`}
         />
       </div>
+
+      {isNew &&
+        (needsBusiness ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+            <p className="font-bold">새 상품(정식 판매)은 사업자 정보가 필요해요</p>
+            <p className="mt-0.5">전자상거래법에 따라 사업자등록번호·통신판매업 신고번호 등을 등록한 판매자만 새 상품을 판매할 수 있어요. 작성 중인 내용은 [임시저장] 해 두세요.</p>
+            <Link href="/my/business?next=/sell" className="tap mt-2 inline-block rounded-lg bg-amber-500 px-3 py-1.5 font-bold text-white">
+              사업자 정보 등록하기
+            </Link>
+          </div>
+        ) : business ? (
+          <p className="flex items-center justify-between rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+            <span>
+              판매자 정보: <b className="text-gray-800">{business.bizName}</b> · {formatBizRegNo(business.bizRegNo)}
+            </span>
+            <Link href="/my/business?next=/sell" className="tap font-bold text-pi">
+              수정
+            </Link>
+          </p>
+        ) : null)}
 
       <p className="rounded-lg bg-violet-50 p-3 text-xs leading-relaxed text-pi">
         구매자는 π로만 결제해요. 결제 금액은 바로온다가 보관하다가 구매자가 구매 확정하면 판매자에게 정산돼요.

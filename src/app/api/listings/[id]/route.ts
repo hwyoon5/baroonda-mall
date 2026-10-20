@@ -1,5 +1,6 @@
 import { getListing, saveListing, withLock } from "@/lib/server/db";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
+import { assertCanPublish } from "@/lib/server/business-input";
 import { parseListingInput, type ListingInput } from "@/lib/server/listing-input";
 import { listingLock } from "@/lib/server/orders";
 import type { Listing } from "@/lib/types";
@@ -28,10 +29,12 @@ export const PUT = handle<Ctx>(async (req, { params }) => {
   if (listing.status !== "draft") throw new HttpError(409, "임시저장 상품만 이어서 작성할 수 있어요.");
   const b = await readJson<ListingInput>(req);
   const draft = b.draft === true;
+  const input = parseListingInput(b, draft);
+  await assertCanPublish(listing.seller.uid, input.condition, draft);
   const next: Listing = {
     id: listing.id,
     seller: listing.seller,
-    ...parseListingInput(b, draft),
+    ...input,
     status: draft ? "draft" : "selling",
     createdAt: draft ? listing.createdAt : new Date().toISOString(),
   };

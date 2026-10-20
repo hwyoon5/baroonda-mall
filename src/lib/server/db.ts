@@ -1,3 +1,4 @@
+import type { SellerBusiness } from "@/lib/business";
 import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
 import type { ChatMessage, ChatRoom, Listing, Order, Review } from "../types";
@@ -77,7 +78,7 @@ function guarded(base: Kv): Kv {
 
 const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : storageMisconfigured ? guarded(memoryKv()) : memoryKv();
 
-const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews" };
+const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
 export async function withLock<T>(key: string, fn: () => Promise<T>, ttlMs = 20_000): Promise<T> {
@@ -194,6 +195,15 @@ export async function listChatMessages(roomId: string) {
 }
 
 // ---------- 거래 후기 (key = orderId, 주문당 1개) ----------
+export async function getBusiness(uid: string): Promise<SellerBusiness | undefined> {
+  const raw = await kv.hget(K.business, uid);
+  return raw ? (JSON.parse(raw) as SellerBusiness) : undefined;
+}
+
+export async function saveBusiness(uid: string, business: SellerBusiness) {
+  await kv.hset(K.business, uid, JSON.stringify(business));
+}
+
 export async function getReviewByOrder(orderId: string): Promise<Review | undefined> {
   const raw = await kv.hget(K.reviews, orderId);
   return raw ? (JSON.parse(raw) as Review) : undefined;

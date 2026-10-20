@@ -1,5 +1,6 @@
 import { listListings, newId, saveListing } from "@/lib/server/db";
 import { handle, json, readJson, requireUser } from "@/lib/server/http";
+import { assertCanPublish } from "@/lib/server/business-input";
 import { parseListingInput, type ListingInput } from "@/lib/server/listing-input";
 import type { Listing } from "@/lib/types";
 
@@ -23,9 +24,11 @@ export const POST = handle(async (req) => {
   const seller = requireUser(req);
   const b = await readJson<ListingInput>(req);
   const draft = b.draft === true;
+  const input = parseListingInput(b, draft);
+  await assertCanPublish(seller.uid, input.condition, draft);
   const listing: Listing = {
     id: newId("l_"),
-    ...parseListingInput(b, draft),
+    ...input,
     seller,
     status: draft ? "draft" : "selling",
     createdAt: new Date().toISOString(),

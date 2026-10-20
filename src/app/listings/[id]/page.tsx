@@ -9,7 +9,8 @@ import SubHeader from "@/components/SubHeader";
 import TradeMethodTag from "@/components/TradeMethodTag";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
-import { getListing, listReviewsForSeller } from "@/lib/server/db";
+import { formatBizRegNo } from "@/lib/business";
+import { getBusiness, getListing, listReviewsForSeller } from "@/lib/server/db";
 import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const listing = await getListing((await params).id);
   if (!listing || listing.status === "draft") notFound();
   const sellerReviews = await listReviewsForSeller(listing.seller.uid);
+  const business = listing.condition === "new" && !listing.demo ? await getBusiness(listing.seller.uid) : undefined;
   const sellerRating = sellerReviews.length ? (sellerReviews.reduce((a, r) => a + r.rating, 0) / sellerReviews.length).toFixed(1) : null;
   const category = findCategory(listing.category);
   const videos = listing.videos ?? [];
@@ -134,6 +136,29 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         </p>
         <p className="whitespace-pre-line pt-2 leading-relaxed text-gray-700">{listing.description || "판매자가 설명을 남기지 않았어요."}</p>
       </section>
+
+      {business && (
+        <section aria-label="판매자 정보" className="mt-2 bg-white px-4 py-4 text-xs leading-relaxed text-gray-600">
+          <h2 className="mb-2 text-sm font-bold text-gray-900">판매자 정보</h2>
+          {(
+            [
+              ["상호", business.bizName],
+              ["대표자", business.ownerName],
+              ["사업자등록번호", formatBizRegNo(business.bizRegNo)],
+              ["통신판매업 신고", business.mailOrderNo ?? "신고 면제 대상"],
+              ["사업장 주소", business.address],
+              ["고객센터", business.phone],
+              ...(business.email ? [["이메일", business.email]] : []),
+            ] as [string, string][]
+          ).map(([k, v]) => (
+            <p key={k}>
+              <span className="inline-block w-28 text-gray-400">{k}</span>
+              {v}
+            </p>
+          ))}
+          <p className="mt-2 text-[11px] text-gray-400">바로온다는 통신판매중개자이며, 상품·거래에 관한 의무와 책임은 판매자에게 있어요.</p>
+        </section>
+      )}
 
       <div className="h-16" aria-hidden />
       <BuyBar listing={listing} />

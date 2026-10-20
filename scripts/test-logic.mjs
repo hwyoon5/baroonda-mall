@@ -43,6 +43,7 @@ const buy = async (token, listingId, option) => {
   await ok("/api/payments/complete", { paymentId: `p-${order.id}`, txid: `tx-${order.id}` }, token);
   return order;
 };
+const biz = { bizName: "바로상점", ownerName: "홍길동", bizRegNo: "123-45-67891", mailOrderNo: "제 2024-서울강남-01234 호", address: "서울시 강남구 테헤란로 1", phone: "02-123-4567" };
 const newBase = { category: "fashion", pricePi: 1, tradeMethods: ["delivery"], images: [], condition: "new" };
 
 const tests = [];
@@ -51,6 +52,7 @@ let seller, b1, b2;
 
 test("인증: authResult 검증, uid 불일치 401", async () => {
   [seller, b1, b2] = await Promise.all([signin("seller"), signin("buyer1"), signin("buyer2")]);
+  await ok("/api/me/business", biz, seller, "PUT");
   assert.equal((await call("/api/user/signin", { authResult: { accessToken: "mock:a", user: { uid: "other", username: "x" } } })).status, 401);
 });
 
@@ -257,6 +259,7 @@ test("정산(A2U): 구매 확정 시 판매자에게 1회 송금, 동시 확정�
 
 test("정산 실패 → 주문은 구매 확정 유지, 판매자 재시도로 완료", async () => {
   const flaky = await signin("flaky");
+  await ok("/api/me/business", biz, flaky, "PUT");
   const { listing: l } = await ok("/api/listings", { ...newBase, title: "정산 재시도", stock: 1 }, flaky);
   const order = await buy(b1, l.id);
   let o = (await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1)).order;
@@ -335,6 +338,29 @@ test("사진 최대 10장·동영상 최대 2개: 개수·형식 검증, 상세 
   assert.ok(html.includes(blob("video")) && html.includes(v2));
   assert.deepEqual((await ok("/api/upload")).enabled, false);
   assert.equal((await call("/api/upload", { type: "blob.generate-client-token", payload: { pathname: "listings/photo/a.jpg" } }, seller)).status, 503);
+});
+
+test("사업자 정보: 검증, 새 상품만 필수(개인 중고·임시저장은 제외), 상세에 판매자 정보 표시", async () => {
+  const s = await signin("biz");
+  assert.deepEqual(await ok("/api/me/business", undefined, s), { business: null });
+  const usedBody = { ...newBase, condition: "used", usageGrade: "A", title: "중고" };
+  await ok("/api/listings", usedBody, s);
+  assert.equal((await call("/api/listings", { ...newBase, title: "새 상품", stock: 3 }, s)).status, 403);
+  const { listing: d } = await ok("/api/listings", { ...newBase, title: "새 상품 임시", stock: 3, draft: true }, s);
+  assert.equal((await call(`/api/listings/${d.id}`, { ...newBase, title: "새 상품 임시", stock: 3 }, s, "PUT")).status, 403);
+  for (const bad of [{ bizRegNo: "123-45-67890" }, { mailOrderNo: "강남-1234" }, { phone: "123" }, { bizName: " " }, { email: "x@" }]) {
+    assert.equal((await call("/api/me/business", { ...biz, ...bad }, s, "PUT")).status, 400, JSON.stringify(bad));
+  }
+  const { business } = await ok("/api/me/business", { ...biz, mailOrderNo: "", mailOrderExempt: true }, s, "PUT");
+  assert.equal(business.bizRegNo, "1234567891");
+  assert.equal(business.mailOrderNo, undefined);
+  const saved = (await ok("/api/me/business", { ...biz }, s, "PUT")).business;
+  assert.equal(saved.mailOrderNo, "2024-서울강남-01234");
+  const { listing: pub } = await ok(`/api/listings/${d.id}`, { ...newBase, title: "새 상품 임시", stock: 3 }, s, "PUT");
+  assert.equal(pub.status, "selling");
+  const html = await (await fetch(`${BASE}/listings/${pub.id}`)).text();
+  assert.ok(html.includes("판매자 정보") && html.includes("123-45-67891") && html.includes("2024-서울강남-01234"));
+  assert.equal((await call("/api/me/business")).status, 401);
 });
 
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
