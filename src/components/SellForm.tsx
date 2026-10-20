@@ -1,15 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { api } from "@/lib/client/api";
+import { uploadMedia, videoDuration } from "@/lib/client/media";
+import { formatBizRegNo, type SellerBusiness } from "@/lib/business";
 import { listingCategories } from "@/lib/categories";
+import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
+import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS, optionPresetsFor, presetValuesFor, type OptionPreset } from "@/lib/options";
 import { usageGradeLabel, type Condition, type Listing, type TradeMethod, type UsageGrade } from "@/lib/types";
 import { useStore } from "./store/StoreProvider";
 
-const MAX_PHOTOS = 3;
-const MAX_OPTIONS = 3;
-const MAX_VARIANTS = 50;
 
 const comboKey = (c: Record<string, string>) => JSON.stringify(c);
 /** Shopify처럼 옵션 값의 모든 조합(variant)을 만든다. 서버(listing-input.ts)와 같은 순서 */
@@ -18,25 +20,15 @@ const cartesian = (opts: { name: string; values: string[] }[]) =>
 
 type OptionDraft = { name: string; values: string };
 
-/** 카테고리별 기본 옵션(새 상품): 첫 옵션 추가 시 채워 넣는다. */
-const optionPreset: Record<string, OptionDraft> = {
-  fashion: { name: "사이즈", values: "S, M, L, XL" },
-  fresh: { name: "중량", values: "1kg, 2kg, 5kg" },
-  beauty: { name: "용량", values: "30ml, 50ml" },
-  digital: { name: "색상", values: "블랙, 화이트" },
-  baby: { name: "연령", values: "0~12개월, 1~3세" },
-  sports: { name: "사이즈", values: "S, M, L" },
-  pet: { name: "중량", values: "500g, 1kg" },
-};
-const defaultPreset: OptionDraft = { name: "색상", values: "블랙, 화이트" };
+const splitValues = (v: string) => [...new Set(v.split(",").map((x) => x.trim()).filter(Boolean))].slice(0, MAX_OPTION_VALUES);
 
 const saleKinds = [
   { v: "new", t: "새 상품(정식 판매)", d: "재고·옵션이 있는 새 상품" },
   { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
 ] as const;
 
-/** 서버 저장 용량을 줄이려고 긴 변 720px JPEG로 줄여 data URL로 만든다. */
-async function compressImage(file: File): Promise<string> {
+/** 긴 변 maxSide px로 줄인 캔버스. */
+async function resizeImage(file: File, maxSide: number): Promise<HTMLCanvasElement> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -45,22 +37,36 @@ async function compressImage(file: File): Promise<string> {
       el.onerror = reject;
       el.src = url;
     });
-    const scale = Math.min(1, 720 / Math.max(img.width, img.height));
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(img.width * scale);
     canvas.height = Math.round(img.height * scale);
     canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.72);
+    return canvas;
   } finally {
     URL.revokeObjectURL(url);
   }
 }
+
+/** Blob 저장소가 있으면 1280px JPEG로 업로드해 URL을, 없으면 720px data URL을 만든다. */
+async function preparePhoto(file: File, blob: boolean): Promise<string> {
+  if (!blob) return (await resizeImage(file, 720)).toDataURL("image/jpeg", 0.72);
+  const canvas = await resizeImage(file, 1280);
+  const jpeg = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob"))), "image/jpeg", 0.8));
+  return uploadMedia(jpeg, "photo", "jpg");
+}
+
+const videoExt = (type: string) => (type === "video/quicktime" ? "mov" : type === "video/webm" ? "webm" : "mp4");
 
 export default function SellForm({ draftId }: { draftId?: string }) {
   const id = useId();
   const router = useRouter();
   const { showToast } = useStore();
   const [photos, setPhotos] = useState<string[]>([]);
+  const [videos, setVideos] = useState<string[]>([]);
+  const [blobEnabled, setBlobEnabled] = useState(false);
+  const [photoUploads, setPhotoUploads] = useState(0);
+  const [videoProgress, setVideoProgress] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [kind, setKind] = useState<Condition>("used");
@@ -69,7 +75,19 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const [stock, setStock] = useState("10");
   const [options, setOptions] = useState<OptionDraft[]>([]);
   const [variantStock, setVariantStock] = useState<Record<string, string>>({});
+  const [bulkTarget, setBulkTarget] = useState("");
+  const [bulkQty, setBulkQty] = useState("");
   const [loading, setLoading] = useState(Boolean(draftId));
+  const [business, setBusiness] = useState<SellerBusiness | null | undefined>(undefined);
+
+  useEffect(() => {
+    api<{ enabled: boolean }>("/api/upload")
+      .then((r) => setBlobEnabled(r.enabled))
+      .catch(() => setBlobEnabled(false));
+    api<{ business: SellerBusiness | null }>("/api/me/business")
+      .then((r) => setBusiness(r.business))
+      .catch(() => setBusiness(null));
+  }, []);
 
   // 임시저장한 상품 이어서 작성
   useEffect(() => {
@@ -88,6 +106,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         setLocation(l.location ?? "");
         setDescription(l.description);
         setPhotos(l.images);
+        setVideos(l.videos ?? []);
         if (l.usageGrade) setUsageGrade(l.usageGrade);
         setUsageNote(l.usageNote ?? "");
         if (l.stock) setStock(String(l.stock));
@@ -110,34 +129,83 @@ export default function SellForm({ draftId }: { draftId?: string }) {
 
   const priceNum = Number(price);
   const isNew = kind === "new";
-  const preset = optionPreset[category] ?? defaultPreset;
+  const presets = optionPresetsFor(category);
+  const suggestedGroups = presets.filter((p) => !options.some((o) => o.name.trim() === p.name));
+  const categoryName = listingCategories.find((c) => c.id === category)?.name;
   const parsedOptions = options
-    .map((o) => ({ name: o.name.trim(), values: [...new Set(o.values.split(",").map((v) => v.trim()).filter(Boolean))] }))
+    .map((o) => ({ name: o.name.trim(), values: splitValues(o.values) }))
     .filter((o) => o.name || o.values.length);
   const optionsValid = parsedOptions.every((o) => o.name && o.values.length > 0);
   const combos = isNew && optionsValid && parsedOptions.length ? cartesian(parsedOptions) : [];
-  const variantTotal = combos.reduce((sum, c) => sum + (Number(variantStock[comboKey(c)]) || 0), 0);
+  const stockOf = (c: Record<string, string>) => Number(variantStock[comboKey(c)]) || 0;
+  const variantTotal = combos.reduce((sum, c) => sum + stockOf(c), 0);
+  const soldOutCount = combos.filter((c) => stockOf(c) === 0).length;
+  // 옵션이 2개 이상이면 첫 옵션 값으로 묶어서 보여준다(예: 블랙 › S/M/L)
+  const groupBy = parsedOptions.length > 1 ? parsedOptions[0] : null;
+  const variantGroups = groupBy ? groupBy.values.map((v) => ({ value: v, items: combos.filter((c) => c[groupBy.name] === v) })) : [{ value: "", items: combos }];
+  const bulkQtyValid = /^\d{1,4}$/.test(bulkQty);
   const stockNum = Number(stock);
   const stockValid = Number.isInteger(stockNum) && stockNum >= 1 && stockNum <= 9999;
+  const needsBusiness = isNew && business === null;
   const valid =
+    (!isNew || !!business) &&
     title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0 && (!isNew || (optionsValid && (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid)));
   const updateOption = (i: number, patch: Partial<OptionDraft>) => setOptions((cur) => cur.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
+  const addOptionGroup = (p?: OptionPreset) =>
+    setOptions((cur) => (cur.length >= MAX_OPTIONS ? cur : [...cur, p ? { name: p.name, values: p.values.join(", ") } : { name: "", values: "" }]));
+  const appendValue = (i: number, v: string) =>
+    setOptions((cur) => cur.map((o, j) => (j !== i ? o : { ...o, values: o.values.trim() ? `${o.values.replace(/[,\s]+$/, "")}, ${v}` : v })));
+  const applyBulk = () => {
+    if (!bulkQtyValid) return;
+    const target = bulkTarget ? (JSON.parse(bulkTarget) as [string, string]) : null;
+    setVariantStock((cur) => {
+      const next = { ...cur };
+      for (const c of combos) if (!target || c[target[0]] === target[1]) next[comboKey(c)] = String(Number(bulkQty));
+      return next;
+    });
+  };
+
   const toggleMethod = (m: TradeMethod) => setMethods((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
+
+  const uploading = photoUploads > 0 || videoProgress !== null;
 
   const addPhotos = async (files: FileList | null) => {
     if (!files) return;
-    const picked = Array.from(files).slice(0, MAX_PHOTOS - photos.length);
+    const all = Array.from(files);
+    const picked = all.slice(0, Math.max(0, MAX_PHOTOS - photos.length - photoUploads));
+    if (picked.length < all.length) showToast(`사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`);
+    if (!picked.length) return;
+    setPhotoUploads((n) => n + picked.length);
+    const results = await Promise.allSettled(
+      picked.map((f) =>
+        preparePhoto(f, blobEnabled).finally(() => setPhotoUploads((n) => n - 1)),
+      ),
+    );
+    const urls = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+    setPhotos((cur) => [...cur, ...urls].slice(0, MAX_PHOTOS));
+    if (urls.length < picked.length) showToast("일부 사진을 올리지 못했어요. 다시 시도해 주세요.");
+  };
+
+  const addVideo = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.type && !VIDEO_TYPES.includes(file.type)) return showToast("MP4·MOV·WebM 동영상만 올릴 수 있어요.");
+    if (file.size > MAX_VIDEO_BYTES) return showToast(`동영상은 ${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하만 올릴 수 있어요.`);
+    const sec = await videoDuration(file);
+    if (sec !== null && sec > MAX_VIDEO_SECONDS + 0.5) return showToast(`동영상은 ${MAX_VIDEO_SECONDS}초 이하만 올릴 수 있어요.`);
+    setVideoProgress(0);
     try {
-      const urls = await Promise.all(picked.map(compressImage));
-      setPhotos((cur) => [...cur, ...urls].slice(0, MAX_PHOTOS));
+      const url = await uploadMedia(file, "video", videoExt(file.type), setVideoProgress);
+      setVideos((cur) => [...cur, url].slice(0, MAX_VIDEOS));
     } catch {
-      showToast("사진을 불러오지 못했어요.");
+      showToast("동영상을 올리지 못했어요. 다시 시도해 주세요.");
+    } finally {
+      setVideoProgress(null);
     }
   };
 
   const save = async (draft: boolean) => {
-    if (busy || (draft ? !title.trim() : !valid)) return;
+    if (busy || uploading || (draft ? !title.trim() : !valid)) return;
     setBusy(true);
     setError("");
     try {
@@ -161,6 +229,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         location,
         description,
         images: photos,
+        videos,
       };
       const { listing } = draftId
         ? await api<{ listing: Listing }>(`/api/listings/${draftId}`, body, "PUT")
@@ -208,43 +277,102 @@ export default function SellForm({ draftId }: { draftId?: string }) {
           );
         })}
       </div>
-      <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-        {photos.length < MAX_PHOTOS && (
-          <label className="tap relative flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 text-gray-400">
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
-              <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
-              <circle cx="12" cy="13" r="3.5" />
-            </svg>
-            <span className="text-[11px] font-medium">
-              {photos.length}/{MAX_PHOTOS}
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="sr-only"
-              onChange={(e) => {
-                void addPhotos(e.target.files);
-                e.target.value = "";
-              }}
-            />
-          </label>
-        )}
-        {photos.map((src, i) => (
-          <div key={i} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={src} alt={`상품 사진 ${i + 1}`} className="h-full w-full object-cover" />
-            {i === 0 && <span className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-[10px] font-bold text-white">대표사진</span>}
-            <button
-              type="button"
-              onClick={() => setPhotos((cur) => cur.filter((_, j) => j !== i))}
-              aria-label="사진 삭제"
-              className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white"
+      <div>
+        <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+          {photos.length + photoUploads < MAX_PHOTOS && (
+            <label className="tap relative flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 text-gray-400">
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
+                <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+                <circle cx="12" cy="13" r="3.5" />
+              </svg>
+              <span className="text-[11px] font-medium">
+                {photos.length}/{MAX_PHOTOS}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="sr-only"
+                aria-label="사진 추가"
+                onChange={(e) => {
+                  void addPhotos(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
+          {videos.length < MAX_VIDEOS && videoProgress === null && (
+            <label
+              className={`relative flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed text-gray-400 ${blobEnabled ? "tap border-gray-300" : "border-gray-200 opacity-50"}`}
             >
-              ×
-            </button>
-          </div>
-        ))}
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
+                <rect x="3" y="6" width="13" height="12" rx="2" />
+                <path d="m16 10 5-3v10l-5-3z" />
+              </svg>
+              <span className="text-[11px] font-medium">
+                동영상 {videos.length}/{MAX_VIDEOS}
+              </span>
+              <input
+                type="file"
+                accept="video/*"
+                disabled={!blobEnabled}
+                className="sr-only"
+                aria-label="동영상 추가"
+                onChange={(e) => {
+                  void addVideo(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          )}
+          {videoProgress !== null && (
+            <div className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl bg-gray-100 text-[11px] font-bold text-gray-500">
+              <span>동영상</span>
+              <span className="text-pi">{videoProgress}%</span>
+            </div>
+          )}
+          {videos.map((src, i) => (
+            <div key={src} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-black">
+              <video src={`${src}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+              <span className="absolute inset-0 flex items-center justify-center text-xl text-white/90" aria-hidden>
+                ▶
+              </span>
+              <button
+                type="button"
+                onClick={() => setVideos((cur) => cur.filter((_, j) => j !== i))}
+                aria-label={`동영상 ${i + 1} 삭제`}
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          {photos.map((src, i) => (
+            <div key={i} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={src} alt={`상품 사진 ${i + 1}`} className="h-full w-full object-cover" />
+              {i === 0 && <span className="absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-[10px] font-bold text-white">대표사진</span>}
+              <button
+                type="button"
+                onClick={() => setPhotos((cur) => cur.filter((_, j) => j !== i))}
+                aria-label="사진 삭제"
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          {Array.from({ length: photoUploads }, (_, i) => (
+            <div key={`up${i}`} className="flex h-20 w-20 shrink-0 animate-pulse items-center justify-center rounded-xl bg-gray-100 text-[11px] text-gray-400">
+              올리는 중
+            </div>
+          ))}
+        </div>
+        <p className="mt-1 text-[11px] text-gray-400">
+          {blobEnabled
+            ? `사진 최대 ${MAX_PHOTOS}장, 동영상 최대 ${MAX_VIDEOS}개(개당 ${MAX_VIDEO_SECONDS}초·${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하)를 올릴 수 있어요.`
+            : `사진 최대 ${MAX_PHOTOS}장을 올릴 수 있어요. 동영상은 저장소 연결 후 사용할 수 있어요.`}
+        </p>
       </div>
 
       <div>
@@ -327,80 +455,162 @@ export default function SellForm({ draftId }: { draftId?: string }) {
             <legend className={label}>
               옵션 <span className="text-xs font-normal text-gray-400">(선택 · 최대 {MAX_OPTIONS}개)</span>
             </legend>
-            <div className="space-y-2">
-              {options.map((o, i) => (
-                <div key={i} className="flex gap-2">
-                  <input
-                    aria-label={`옵션 ${i + 1} 이름`}
-                    value={o.name}
-                    onChange={(e) => updateOption(i, { name: e.target.value })}
-                    maxLength={10}
-                    placeholder={preset.name}
-                    className={`${field} w-24 shrink-0`}
-                  />
-                  <input
-                    aria-label={`옵션 ${i + 1} 값`}
-                    value={o.values}
-                    onChange={(e) => updateOption(i, { values: e.target.value })}
-                    placeholder={preset.values}
-                    className={`${field} min-w-0 flex-1`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setOptions((cur) => cur.filter((_, j) => j !== i))}
-                    aria-label={`옵션 ${i + 1} 삭제`}
-                    className="tap shrink-0 px-1 text-lg text-gray-400"
-                  >
-                    ×
-                  </button>
+            {suggestedGroups.length > 0 && options.length < MAX_OPTIONS && (
+              <div className="mb-2">
+                <p className="mb-1 text-[11px] text-gray-500">{categoryName ? `${categoryName} 추천 옵션` : "추천 옵션"} · 탭하면 기본 값과 함께 추가돼요</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggestedGroups.map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => addOptionGroup(p)}
+                      className="tap rounded-full border border-pi/30 bg-pi/5 px-3 py-1 text-xs font-bold text-pi"
+                    >
+                      + {p.name}
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+            <div className="space-y-2">
+              {options.map((o, i) => {
+                const vals = splitValues(o.values);
+                const quick = presetValuesFor(category, o.name).filter((v) => !vals.includes(v));
+                return (
+                  <div key={i} className="rounded-lg border border-gray-200 p-2">
+                    <div className="flex gap-2">
+                      <input
+                        aria-label={`옵션 ${i + 1} 이름`}
+                        value={o.name}
+                        onChange={(e) => updateOption(i, { name: e.target.value })}
+                        maxLength={10}
+                        placeholder="옵션명"
+                        className={`${field} w-24 shrink-0`}
+                      />
+                      <input
+                        aria-label={`옵션 ${i + 1} 값`}
+                        value={o.values}
+                        onChange={(e) => updateOption(i, { values: e.target.value })}
+                        placeholder="값1, 값2"
+                        className={`${field} min-w-0 flex-1`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setOptions((cur) => cur.filter((_, j) => j !== i))}
+                        aria-label={`옵션 ${i + 1} 삭제`}
+                        className="tap shrink-0 px-1 text-lg text-gray-400"
+                      >
+                        ×
+                      </button>
+                    </div>
+                    {quick.length > 0 && vals.length < MAX_OPTION_VALUES && (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        {quick.map((v) => (
+                          <button key={v} type="button" onClick={() => appendValue(i, v)} className="tap rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
+                            + {v}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             {options.length < MAX_OPTIONS && (
               <button
                 type="button"
-                onClick={() => setOptions((cur) => [...cur, cur.length === 0 ? { ...preset } : { name: "", values: "" }])}
+                onClick={() => addOptionGroup()}
                 className="tap mt-2 w-full rounded-lg border border-dashed border-gray-300 py-2 text-xs font-bold text-gray-600"
               >
-                + 옵션 추가{options.length === 0 && category ? ` (예: ${preset.name})` : ""}
+                + 직접 옵션 추가
               </button>
             )}
-            <p className="mt-1.5 text-[11px] text-gray-500">옵션 값은 쉼표(,)로 구분해요. 구매자는 결제 전에 옵션을 골라요.</p>
+            <p className="mt-1.5 text-[11px] text-gray-500">옵션 값은 쉼표(,)로 구분해요(옵션당 최대 {MAX_OPTION_VALUES}개). 구매자는 결제 전에 옵션을 골라요.</p>
           </fieldset>
           {combos.length > 0 && (
             <div>
               <p className={label}>
                 옵션별 재고 <span className="text-red-500">*</span>{" "}
-                <span className="text-xs font-normal text-gray-500">총 {variantTotal}개</span>
+                <span className="text-xs font-normal text-gray-500">
+                  조합 {combos.length}개 · 총 {variantTotal}개{soldOutCount ? ` · 품절 ${soldOutCount}개` : ""}
+                </span>
               </p>
               {combos.length > MAX_VARIANTS ? (
                 <p className="text-xs text-red-500">
                   옵션 조합이 {combos.length}개예요. 최대 {MAX_VARIANTS}개까지 만들 수 있어요.
                 </p>
               ) : (
-                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
-                  {combos.map((c) => {
-                    const k = comboKey(c);
-                    const name = Object.values(c).join(" / ");
-                    return (
-                      <li key={k} className="flex items-center gap-2 px-3 py-2">
-                        <span className="flex-1 text-sm text-gray-800">{name}</span>
-                        <input
-                          aria-label={`${name} 재고`}
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          max={9999}
-                          value={variantStock[k] ?? ""}
-                          onChange={(e) => setVariantStock((cur) => ({ ...cur, [k]: e.target.value }))}
-                          placeholder="0"
-                          className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-right text-sm focus:border-pi focus:outline-none"
-                        />
-                        <span className="text-xs text-gray-500">개</span>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  <div className="mb-2 flex gap-2 rounded-lg bg-gray-50 p-2">
+                    <select
+                      aria-label="일괄 입력 대상"
+                      value={bulkTarget}
+                      onChange={(e) => setBulkTarget(e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs"
+                    >
+                      <option value="">전체 조합</option>
+                      {parsedOptions.flatMap((o) =>
+                        o.values.map((v) => (
+                          <option key={`${o.name}:${v}`} value={JSON.stringify([o.name, v])}>
+                            {o.name}: {v}
+                          </option>
+                        )),
+                      )}
+                    </select>
+                    <input
+                      aria-label="일괄 재고 수량"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={9999}
+                      value={bulkQty}
+                      onChange={(e) => setBulkQty(e.target.value)}
+                      placeholder="수량"
+                      className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-right text-xs"
+                    />
+                    <button type="button" onClick={applyBulk} disabled={!bulkQtyValid} className="tap rounded-lg bg-gray-800 px-3 text-xs font-bold text-white disabled:opacity-40">
+                      일괄 적용
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {variantGroups.map((g) => (
+                      <div key={g.value || "all"} className="overflow-hidden rounded-lg border border-gray-200">
+                        {groupBy && (
+                          <p className="flex justify-between bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-700">
+                            <span>
+                              {groupBy.name}: {g.value}
+                            </span>
+                            <span className="font-normal text-gray-500">{g.items.reduce((n, c) => n + stockOf(c), 0)}개</span>
+                          </p>
+                        )}
+                        <ul className="divide-y divide-gray-100">
+                          {g.items.map((c) => {
+                            const k = comboKey(c);
+                            const name = Object.values(c).join(" / ");
+                            const shown = groupBy ? Object.entries(c).filter(([n]) => n !== groupBy.name).map(([, v]) => v).join(" / ") : name;
+                            return (
+                              <li key={k} className="flex items-center gap-2 px-3 py-2">
+                                <span className={`flex-1 text-sm ${stockOf(c) ? "text-gray-800" : "text-gray-400"}`}>{shown}</span>
+                                <input
+                                aria-label={`${name} 재고`}
+                                type="number"
+                                inputMode="numeric"
+                                min={0}
+                                max={9999}
+                                value={variantStock[k] ?? ""}
+                                onChange={(e) => setVariantStock((cur) => ({ ...cur, [k]: e.target.value }))}
+                                placeholder="0"
+                                className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-right text-sm focus:border-pi focus:outline-none"
+                            />
+                                <span className="text-xs text-gray-500">개</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               <p className="mt-1.5 text-[11px] text-gray-500">조합별로 재고를 따로 관리해요. 0개인 조합은 구매자에게 품절로 보여요.</p>
             </div>
@@ -522,6 +732,26 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         />
       </div>
 
+      {isNew &&
+        (needsBusiness ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+            <p className="font-bold">새 상품(정식 판매)은 사업자 정보가 필요해요</p>
+            <p className="mt-0.5">전자상거래법에 따라 사업자등록번호·통신판매업 신고번호 등을 등록한 판매자만 새 상품을 판매할 수 있어요. 작성 중인 내용은 [임시저장] 해 두세요.</p>
+            <Link href="/my/business?next=/sell" className="tap mt-2 inline-block rounded-lg bg-amber-500 px-3 py-1.5 font-bold text-white">
+              사업자 정보 등록하기
+            </Link>
+          </div>
+        ) : business ? (
+          <p className="flex items-center justify-between rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+            <span>
+              판매자 정보: <b className="text-gray-800">{business.bizName}</b> · {formatBizRegNo(business.bizRegNo)}
+            </span>
+            <Link href="/my/business?next=/sell" className="tap font-bold text-pi">
+              수정
+            </Link>
+          </p>
+        ) : null)}
+
       <p className="rounded-lg bg-violet-50 p-3 text-xs leading-relaxed text-pi">
         구매자는 π로만 결제해요. 결제 금액은 바로온다가 보관하다가 구매자가 구매 확정하면 판매자에게 정산돼요.
       </p>
@@ -531,17 +761,17 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         <button
           type="button"
           onClick={() => void save(true)}
-          disabled={!title.trim() || busy || loading}
+          disabled={!title.trim() || busy || loading || uploading}
           className="tap shrink-0 rounded-xl border border-gray-300 px-4 py-3.5 text-sm font-bold text-gray-700 disabled:opacity-50"
         >
           임시저장
         </button>
         <button
           type="submit"
-          disabled={!valid || busy || loading}
+          disabled={!valid || busy || loading || uploading}
           className="tap flex-1 rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
         >
-          {busy ? "저장 중…" : isNew ? "새 상품 등록하기" : "중고 판매글 등록하기"}
+          {uploading ? "업로드 중…" : busy ? "저장 중…" : isNew ? "새 상품 등록하기" : "중고 판매글 등록하기"}
         </button>
       </div>
     </form>

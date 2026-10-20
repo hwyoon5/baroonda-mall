@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import BuyBar from "@/components/BuyBar";
 import FastDeliveryTag from "@/components/FastDeliveryTag";
@@ -8,28 +9,44 @@ import SubHeader from "@/components/SubHeader";
 import TradeMethodTag from "@/components/TradeMethodTag";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
-import { getListing, listReviewsForSeller } from "@/lib/server/db";
+import { formatBizRegNo } from "@/lib/business";
+import { getBusiness, getListing, listReviewsForSeller } from "@/lib/server/db";
 import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+function ListingVideo({ src, poster }: { src: string; poster?: string }) {
+  return <video src={src} poster={poster} controls playsInline preload="metadata" className="aspect-square w-full shrink-0 snap-start bg-black object-contain" />;
+}
 
 export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const listing = await getListing((await params).id);
   if (!listing || listing.status === "draft") notFound();
   const sellerReviews = await listReviewsForSeller(listing.seller.uid);
+  const business = listing.condition === "new" && !listing.demo ? await getBusiness(listing.seller.uid) : undefined;
   const sellerRating = sellerReviews.length ? (sellerReviews.reduce((a, r) => a + r.rating, 0) / sellerReviews.length).toFixed(1) : null;
   const category = findCategory(listing.category);
+  const videos = listing.videos ?? [];
   const rate = discountRate(listing.pricePi, listing.originalPricePi);
 
   return (
     <>
       <SubHeader title={listing.title} />
-      {listing.images.length > 1 ? (
-        <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">
-          {listing.images.map((src, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={i} src={src} alt={`${listing.title} 사진 ${i + 1}`} className="aspect-square w-full shrink-0 snap-start object-cover" />
-          ))}
+      {listing.images.length > 1 || videos.length ? (
+        <div className="relative">
+          <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">
+            {listing.images.map((src, i) => (
+              <Fragment key={i}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt={`${listing.title} 사진 ${i + 1}`} className="aspect-square w-full shrink-0 snap-start object-cover" />
+                {i === 0 && videos.map((v) => <ListingVideo key={v} src={v} poster={src} />)}
+              </Fragment>
+            ))}
+            {!listing.images.length && videos.map((v) => <ListingVideo key={v} src={v} />)}
+          </div>
+          <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white">
+            {videos.length ? `▶ 동영상 ${videos.length} · ` : ""}사진 {listing.images.length}
+          </span>
         </div>
       ) : (
         <ListingThumb listing={listing} className="aspect-square" emojiClass="text-[9rem]" />
@@ -119,6 +136,29 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         </p>
         <p className="whitespace-pre-line pt-2 leading-relaxed text-gray-700">{listing.description || "판매자가 설명을 남기지 않았어요."}</p>
       </section>
+
+      {business && (
+        <section aria-label="판매자 정보" className="mt-2 bg-white px-4 py-4 text-xs leading-relaxed text-gray-600">
+          <h2 className="mb-2 text-sm font-bold text-gray-900">판매자 정보</h2>
+          {(
+            [
+              ["상호", business.bizName],
+              ["대표자", business.ownerName],
+              ["사업자등록번호", formatBizRegNo(business.bizRegNo)],
+              ["통신판매업 신고", business.mailOrderNo ?? "신고 면제 대상"],
+              ["사업장 주소", business.address],
+              ["고객센터", business.phone],
+              ...(business.email ? [["이메일", business.email]] : []),
+            ] as [string, string][]
+          ).map(([k, v]) => (
+            <p key={k}>
+              <span className="inline-block w-28 text-gray-400">{k}</span>
+              {v}
+            </p>
+          ))}
+          <p className="mt-2 text-[11px] text-gray-400">바로온다는 통신판매중개자이며, 상품·거래에 관한 의무와 책임은 판매자에게 있어요.</p>
+        </section>
+      )}
 
       <div className="h-16" aria-hidden />
       <BuyBar listing={listing} />

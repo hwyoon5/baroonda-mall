@@ -32,6 +32,8 @@ export type Listing = {
   location?: string;
   fastShipping: boolean;
   images: string[];
+  /** 짧은 상품 동영상(Vercel Blob URL, 최대 MAX_VIDEOS개) */
+  videos?: string[];
   /** 새 상품(정식 판매)의 남은 재고. 개인 중고는 항상 1개라 비워둔다. */
   stock?: number;
   soldCount?: number;

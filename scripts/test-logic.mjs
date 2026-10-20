@@ -43,6 +43,7 @@ const buy = async (token, listingId, option) => {
   await ok("/api/payments/complete", { paymentId: `p-${order.id}`, txid: `tx-${order.id}` }, token);
   return order;
 };
+const biz = { bizName: "바로상점", ownerName: "홍길동", bizRegNo: "123-45-67891", mailOrderNo: "제 2024-서울강남-01234 호", address: "서울시 강남구 테헤란로 1", phone: "02-123-4567" };
 const newBase = { category: "fashion", pricePi: 1, tradeMethods: ["delivery"], images: [], condition: "new" };
 
 const tests = [];
@@ -51,6 +52,7 @@ let seller, b1, b2;
 
 test("인증: authResult 검증, uid 불일치 401", async () => {
   [seller, b1, b2] = await Promise.all([signin("seller"), signin("buyer1"), signin("buyer2")]);
+  await ok("/api/me/business", biz, seller, "PUT");
   assert.equal((await call("/api/user/signin", { authResult: { accessToken: "mock:a", user: { uid: "other", username: "x" } } })).status, 401);
 });
 
@@ -110,6 +112,22 @@ test("옵션 조합별 재고: 품절 조합만 막히고 재입고 시 복구",
   cur = await listing(l.id);
   assert.equal(cur.stock, 5);
   await buy(b2, l.id, { 사이즈: "M", 색상: "블랙" });
+});
+
+test("옵션 확장: 최대 5개 그룹·100개 조합, 초과 시 400", async () => {
+  const opt = (name, n) => ({ name, values: Array.from({ length: n }, (_, i) => `${name}${i}`) });
+  const five = ["색상", "사이즈", "핏", "소재", "구성"].map((n) => opt(n, 2));
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "5옵션", options: five, variants: [{ options: Object.fromEntries(five.map((o) => [o.name, o.values[1]])), stock: 4 }] }, seller);
+  assert.equal(l.options.length, 5);
+  assert.equal(l.variants.length, 32);
+  assert.equal(l.stock, 4);
+  assert.equal((await call("/api/listings", { ...newBase, title: "6옵션", options: [...five, opt("맛", 1)], variants: [] }, seller)).status, 400);
+  const { listing: big } = await ok("/api/listings", { ...newBase, title: "100조합", options: [opt("저장용량", 10), opt("색상", 10)], variants: [{ options: { 저장용량: "저장용량0", 색상: "색상9" }, stock: 1 }] }, seller);
+  assert.equal(big.variants.length, 100);
+  assert.equal((await call("/api/listings", { ...newBase, title: "125조합", options: [opt("a", 5), opt("b", 5), opt("c", 5)], variants: [] }, seller)).status, 400);
+  const o = opt("호수", 25);
+  const { listing: many } = await ok("/api/listings", { ...newBase, title: "20값", options: [o], variants: [{ options: { 호수: "호수0" }, stock: 1 }] }, seller);
+  assert.equal(many.options[0].values.length, 20);
 });
 
 test("임시저장: 비공개, 이어서 작성 후 게시", async () => {
@@ -241,6 +259,7 @@ test("정산(A2U): 구매 확정 시 판매자에게 1회 송금, 동시 확정�
 
 test("정산 실패 → 주문은 구매 확정 유지, 판매자 재시도로 완료", async () => {
   const flaky = await signin("flaky");
+  await ok("/api/me/business", biz, flaky, "PUT");
   const { listing: l } = await ok("/api/listings", { ...newBase, title: "정산 재시도", stock: 1 }, flaky);
   const order = await buy(b1, l.id);
   let o = (await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1)).order;
@@ -299,6 +318,49 @@ test("환불: 판매자 판매 취소, 구매자 철회 후 구매 확정·정�
   const done = (await ok(`/api/orders/${o2.id}`, { action: "confirm" }, b2)).order;
   assert.deepEqual([done.status, done.payout], ["completed", "paid"]);
   assert.equal((await listing(l.id)).stock, 1);
+});
+
+test("사진 최대 10장·동영상 최대 2개: 개수·형식 검증, 상세 노출, 저장소 미연결 시 업로드 503", async () => {
+  const img = "data:image/jpeg;base64,/9j/4AAQ";
+  const blob = (dir) => `https://abc123.public.blob.vercel-storage.com/listings/${dir}/m-x1Y2.${dir === "video" ? "mp4" : "jpg"}`;
+  const base = { ...newBase, title: `미디어${run}`, stock: 1 };
+  assert.equal((await call("/api/listings", { ...base, images: Array(11).fill(img) }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...base, images: [img], videos: Array(3).fill(blob("video")) }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...base, images: [img], videos: ["https://evil.example.com/listings/video/a.mp4"] }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...base, images: [img], videos: [blob("photo")] }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...base, images: ["https://evil.example.com/a.jpg"] }, seller)).status, 400);
+  const v2 = blob("video").replace("m-x1Y2", "m-z9");
+  const { listing: l } = await ok("/api/listings", { ...base, images: [...Array(9).fill(img), blob("photo")], videos: [blob("video"), v2] }, seller);
+  assert.equal(l.images.length, 10);
+  assert.deepEqual(l.videos, [blob("video"), v2]);
+  const html = await (await fetch(`${BASE}/listings/${l.id}`)).text();
+  assert.equal(html.split("<video").length - 1, 2);
+  assert.ok(html.includes(blob("video")) && html.includes(v2));
+  assert.deepEqual((await ok("/api/upload")).enabled, false);
+  assert.equal((await call("/api/upload", { type: "blob.generate-client-token", payload: { pathname: "listings/photo/a.jpg" } }, seller)).status, 503);
+});
+
+test("사업자 정보: 검증, 새 상품만 필수(개인 중고·임시저장은 제외), 상세에 판매자 정보 표시", async () => {
+  const s = await signin("biz");
+  assert.deepEqual(await ok("/api/me/business", undefined, s), { business: null });
+  const usedBody = { ...newBase, condition: "used", usageGrade: "A", title: "중고" };
+  await ok("/api/listings", usedBody, s);
+  assert.equal((await call("/api/listings", { ...newBase, title: "새 상품", stock: 3 }, s)).status, 403);
+  const { listing: d } = await ok("/api/listings", { ...newBase, title: "새 상품 임시", stock: 3, draft: true }, s);
+  assert.equal((await call(`/api/listings/${d.id}`, { ...newBase, title: "새 상품 임시", stock: 3 }, s, "PUT")).status, 403);
+  for (const bad of [{ bizRegNo: "123-45-67890" }, { mailOrderNo: "강남-1234" }, { phone: "123" }, { bizName: " " }, { email: "x@" }]) {
+    assert.equal((await call("/api/me/business", { ...biz, ...bad }, s, "PUT")).status, 400, JSON.stringify(bad));
+  }
+  const { business } = await ok("/api/me/business", { ...biz, mailOrderNo: "", mailOrderExempt: true }, s, "PUT");
+  assert.equal(business.bizRegNo, "1234567891");
+  assert.equal(business.mailOrderNo, undefined);
+  const saved = (await ok("/api/me/business", { ...biz }, s, "PUT")).business;
+  assert.equal(saved.mailOrderNo, "2024-서울강남-01234");
+  const { listing: pub } = await ok(`/api/listings/${d.id}`, { ...newBase, title: "새 상품 임시", stock: 3 }, s, "PUT");
+  assert.equal(pub.status, "selling");
+  const html = await (await fetch(`${BASE}/listings/${pub.id}`)).text();
+  assert.ok(html.includes("판매자 정보") && html.includes("123-45-67891") && html.includes("2024-서울강남-01234"));
+  assert.equal((await call("/api/me/business")).status, 401);
 });
 
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
