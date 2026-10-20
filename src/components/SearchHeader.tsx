@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import CartLink from "./CartLink";
+import HeartLink from "./HeartLink";
 
-const keywords = ["감귤", "이어폰", "한우", "세제", "바나나"];
+const keywords = ["아이패드", "이어폰", "패딩", "감귤", "스위치"];
 
 export default function SearchHeader({ initialQuery = "" }: { initialQuery?: string }) {
   const router = useRouter();
@@ -25,13 +25,12 @@ export default function SearchHeader({ initialQuery = "" }: { initialQuery?: str
           바로온다
         </Link>
         <div className="flex items-center text-white">
-          <Link href="/my" aria-label="알림" className="tap relative rounded-full p-1.5">
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+          <HeartLink className="p-1.5" />
+          <Link href="/my" aria-label="마이페이지" className="tap rounded-full p-1.5">
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+              <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" />
             </svg>
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-pi-gold" />
           </Link>
-          <CartLink className="p-1.5" badgeClassName="bg-pi-gold text-pi" />
         </div>
       </div>
 
@@ -52,7 +51,7 @@ export default function SearchHeader({ initialQuery = "" }: { initialQuery?: str
           enterKeyHint="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="오늘 주문하면 내일 바로온다!"
+          placeholder="파이로 사고파는 우리동네 오픈마켓"
           className="w-full bg-transparent text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none"
           aria-label="상품 검색"
         />

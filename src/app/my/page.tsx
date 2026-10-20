@@ -1,48 +1,64 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import ListingCard from "@/components/ListingCard";
 import SubHeader from "@/components/SubHeader";
-import { useStore } from "@/components/store/StoreProvider";
+import LoginCard from "@/components/pi/LoginCard";
+import { usePi } from "@/components/pi/PiProvider";
+import { api } from "@/lib/client/api";
+import type { Listing } from "@/lib/types";
 
 export default function MyPage() {
-  const { wishlist, cartCount, showToast } = useStore();
-  const menus = [
-    { label: "찜한 상품", href: "/wishlist", value: `${wishlist.length}` },
-    { label: "장바구니", href: "/cart", value: `${cartCount}` },
-    { label: "주문내역", href: "/orders" },
-    { label: "내 중고 판매글", href: "/market" },
-  ];
+  const { user, ready, logout } = usePi();
+  const [mine, setMine] = useState<Listing[] | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    api<{ listings: Listing[] }>("/api/listings?seller=me")
+      .then((r) => setMine(r.listings))
+      .catch(() => setMine([]));
+  }, [user]);
 
   return (
     <>
-      <SubHeader title="마이바로온다" back={false} />
-      <section className="flex items-center gap-3 bg-white px-4 py-5">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-pi text-2xl font-black text-pi-gold">π</span>
-        <div className="flex-1">
-          <p className="text-base font-bold text-gray-900">파이오니어님</p>
-          <p className="text-xs text-gray-500">Pi 계정으로 로그인하면 주문·결제를 할 수 있어요</p>
-        </div>
-      </section>
-      <div className="bg-white px-4 pb-4">
-        <button
-          type="button"
-          onClick={() => showToast("Pi 로그인 연동은 준비 중이에요")}
-          className="tap h-11 w-full rounded-xl bg-pi text-sm font-bold text-white"
-        >
-          Pi 계정으로 로그인
-        </button>
-      </div>
-      <ul className="mt-2 divide-y divide-gray-100 bg-white">
-        {menus.map((m) => (
-          <li key={m.label}>
-            <Link href={m.href} className="tap flex items-center px-4 py-4 text-sm text-gray-900">
-              <span className="flex-1">{m.label}</span>
-              {m.value && <span className="mr-2 font-bold text-pi">{m.value}</span>}
-              <span className="text-gray-300">&rsaquo;</span>
+      <SubHeader title="마이" back={false} />
+      {!ready ? null : !user ? (
+        <LoginCard message="Pi 계정으로 로그인하고 바로온다에서 사고팔아 보세요." />
+      ) : (
+        <>
+          <section className="flex items-center gap-3 bg-white px-4 py-5">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-pi text-xl font-black text-pi-gold">π</span>
+            <div className="flex-1">
+              <p className="text-base font-extrabold text-gray-900">{user.username}</p>
+              <p className="text-xs text-gray-500">Pi 계정으로 로그인됨</p>
+            </div>
+            <button type="button" onClick={logout} className="tap rounded-full border border-gray-200 px-3 py-1.5 text-xs text-gray-600">
+              로그아웃
+            </button>
+          </section>
+          <nav className="mt-2 grid grid-cols-3 bg-white py-3 text-center text-xs text-gray-700">
+            <Link href="/wishlist" className="tap py-2">
+              <span className="block text-xl">❤️</span>찜 목록
             </Link>
-          </li>
-        ))}
-      </ul>
+            <Link href="/orders" className="tap py-2">
+              <span className="block text-xl">🧾</span>거래내역
+            </Link>
+            <Link href="/sell" className="tap py-2">
+              <span className="block text-xl">✏️</span>판매하기
+            </Link>
+          </nav>
+          <section className="mt-2 bg-white px-4 py-4">
+            <h2 className="mb-3 text-base font-extrabold text-gray-900">내 판매글 {mine ? mine.length : ""}</h2>
+            {mine && mine.length === 0 && <p className="py-8 text-center text-sm text-gray-500">아직 등록한 상품이 없어요.</p>}
+            <ul className="grid grid-cols-2 gap-x-3 gap-y-5">
+              {mine?.map((l) => (
+                <ListingCard key={l.id} listing={l} />
+              ))}
+            </ul>
+          </section>
+        </>
+      )}
     </>
   );
 }

@@ -1,4 +1,4 @@
-import { tradeMethodLabel, type TradeMethod } from "@/data/p2p";
+import { tradeMethodLabel, type TradeMethod } from "@/lib/types";
 
 const styles: Record<TradeMethod, string> = {
   direct: "bg-emerald-50 text-emerald-700",
