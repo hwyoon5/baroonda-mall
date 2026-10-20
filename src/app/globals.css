@@ -3,7 +3,30 @@
 @theme {
   --color-pi: #6b3fa0;
   --color-pi-gold: #f7b733;
+  --animate-sheet-up: sheet-up 0.25s ease-out;
+  --animate-fade-in: fade-in 0.2s ease-out;
   --font-sans: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif;
+
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {

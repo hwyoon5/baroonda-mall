@@ -1,5 +1,6 @@
 import BottomNav from "@/components/BottomNav";
 import CategoryGrid from "@/components/CategoryGrid";
+import P2PMarket from "@/components/P2PMarket";
 import ProductGrid from "@/components/ProductGrid";
 import SearchHeader from "@/components/SearchHeader";
 import TodayDeals from "@/components/TodayDeals";
@@ -20,6 +21,7 @@ export default function Home() {
         </div>
         <CategoryGrid />
         <TodayDeals />
+        <P2PMarket />
         <ProductGrid />
       </main>
       <BottomNav />

@@ -3,6 +3,8 @@ export type Category = {
   name: string;
   icon: string;
   bg: string;
+  href?: string;
+  badge?: string;
 };
 
 export type Deal = {
@@ -29,12 +31,12 @@ export type Product = {
 };
 
 export const categories: Category[] = [
+  { id: "used", name: "중고마켓", icon: "🤝", bg: "bg-violet-100", href: "#p2p", badge: "NEW" },
   { id: "fresh", name: "신선식품", icon: "🥬", bg: "bg-green-50" },
   { id: "fashion", name: "패션", icon: "👕", bg: "bg-pink-50" },
   { id: "beauty", name: "뷰티", icon: "💄", bg: "bg-rose-50" },
   { id: "digital", name: "디지털", icon: "📱", bg: "bg-sky-50" },
   { id: "living", name: "생활용품", icon: "🧻", bg: "bg-amber-50" },
-  { id: "kitchen", name: "주방", icon: "🍳", bg: "bg-orange-50" },
   { id: "baby", name: "유아동", icon: "🧸", bg: "bg-yellow-50" },
   { id: "sports", name: "스포츠", icon: "⚽", bg: "bg-emerald-50" },
   { id: "pet", name: "반려동물", icon: "🐶", bg: "bg-lime-50" },
