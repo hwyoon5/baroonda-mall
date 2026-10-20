@@ -185,3 +185,18 @@ export type Review = {
   text: string;
   createdAt: string;
 };
+
+/** 쇼츠: 사용자가 올린 세로 짧은 동영상. 내 상품을 연결하면 피드에서 바로 상품으로 이동할 수 있다. */
+export type ShortStatus = "public" | "hidden" | "deleted";
+export type Short = {
+  id: string;
+  /** Vercel Blob 동영상 URL */
+  videoUrl: string;
+  caption: string;
+  listingId?: string;
+  author: PiUser;
+  status: ShortStatus;
+  createdAt: string;
+};
+/** 피드 응답: 연결 상품은 조회 시점의 정보로 붙인다 */
+export type ShortView = Short & { listing?: { id: string; title: string; pricePi: number; image?: string; status: ListingStatus } };

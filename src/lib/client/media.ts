@@ -31,3 +31,5 @@ export async function videoDuration(file: File): Promise<number | null> {
     URL.revokeObjectURL(url);
   }
 }
+
+export const videoExt = (type: string) => (type === "video/quicktime" ? "mov" : type === "video/webm" ? "webm" : "mp4");

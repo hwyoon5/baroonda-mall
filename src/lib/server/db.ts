@@ -1,7 +1,7 @@
 import type { SellerBusiness } from "@/lib/business";
 import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
-import type { ChatMessage, ChatRoom, Listing, Order, Review } from "../types";
+import type { ChatMessage, ChatRoom, Listing, Order, Review, Short } from "../types";
 import { HttpError } from "./http";
 import { PiConfigError } from "./pi";
 
@@ -78,7 +78,7 @@ function guarded(base: Kv): Kv {
 
 const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : storageMisconfigured ? guarded(memoryKv()) : memoryKv();
 
-const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business" };
+const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
 export async function withLock<T>(key: string, fn: () => Promise<T>, ttlMs = 20_000): Promise<T> {
@@ -217,5 +217,25 @@ export async function listReviewsForSeller(sellerUid: string) {
   return (await kv.hvals(K.reviews))
     .map((v) => JSON.parse(v) as Review)
     .filter((r) => r.sellerUid === sellerUid)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// ---------- 쇼츠 ----------
+export async function getShort(id: string): Promise<Short | undefined> {
+  const raw = await kv.hget(K.shorts, id);
+  const short = raw ? (JSON.parse(raw) as Short) : undefined;
+  return short?.status === "deleted" ? undefined : short;
+}
+
+export async function saveShort(short: Short) {
+  await kv.hset(K.shorts, short.id, JSON.stringify(short));
+}
+
+/** 최신순. 기본은 공개 쇼츠만, includeHidden이면 숨김도 포함(삭제는 항상 제외). */
+export async function listShorts(f: { authorUid?: string; includeHidden?: boolean } = {}) {
+  return (await kv.hvals(K.shorts))
+    .map((v) => JSON.parse(v) as Short)
+    .filter((s) => s.status === "public" || (f.includeHidden && s.status === "hidden"))
+    .filter((s) => !f.authorUid || s.author.uid === f.authorUid)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
