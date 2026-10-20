@@ -199,6 +199,15 @@ test("1:1 채팅: 방 생성(중복 없음)·메시지·안 읽음·권한", asy
   assert.deepEqual(after.messages.map((m) => m.text), ["사이즈 문의드려요", "네 가능해요"]);
   const bl = await ok("/api/chats", undefined, b1);
   assert.equal(bl.rooms.find((r) => r.id === room.id).lastMessage, "네 가능해요");
+  // 양쪽이 동시에 보내도 createdAt이 저장 순서대로 겹치지 않아 ?after= 커서가 메시지를 건너뛰지 않는다
+  await Promise.all(Array.from({ length: 6 }, (_, i) => ok(`/api/chats/${room.id}`, { text: `동시 ${i}` }, i % 2 ? seller : b1)));
+  const all = (await ok(`/api/chats/${room.id}`, undefined, b1)).messages;
+  assert.equal(all.length, 9);
+  assert.equal(new Set(all.map((m) => m.createdAt)).size, all.length, "createdAt 중복 없음");
+  for (let i = 0; i < all.length; i++) {
+    const rest = await ok(`/api/chats/${room.id}?after=${encodeURIComponent(all[i].createdAt)}`, undefined, seller);
+    assert.equal(rest.messages.length, all.length - 1 - i, "커서 이후 누락 없음");
+  }
 });
 
 test("거래 후기: 구매 확정한 구매자만 1회, 판매자 프로필 평균 반영", async () => {

@@ -35,15 +35,18 @@ export const POST = handle<Ctx>(async (req, ctx) => {
   const body = typeof text === "string" ? text.trim() : "";
   if (!body) throw new HttpError(400, "메시지를 입력해 주세요.");
   if (body.length > MAX_TEXT) throw new HttpError(400, `메시지는 ${MAX_TEXT}자까지 보낼 수 있어요.`);
-  const msg: ChatMessage = { id: newId("m_"), roomId: room.id, senderUid: user.uid, text: body, createdAt: new Date().toISOString() };
   const other = room.buyer.uid === user.uid ? room.seller.uid : room.buyer.uid;
-  await withLock(`chat:${room.id}`, async () => {
-    await addChatMessage(msg);
+  // 시각은 잠금 안에서 정해 저장 순서와 createdAt 순서를 맞춘다(?after= 커서가 메시지를 건너뛰지 않도록).
+  const msg = await withLock(`chat:${room.id}`, async () => {
     const cur = (await getChatRoom(room.id))!;
+    const at = new Date(Math.max(Date.now(), cur.lastMessage === undefined ? 0 : Date.parse(cur.lastAt) + 1)).toISOString();
+    const m: ChatMessage = { id: newId("m_"), roomId: room.id, senderUid: user.uid, text: body, createdAt: at };
+    await addChatMessage(m);
     cur.lastMessage = body.slice(0, 80);
-    cur.lastAt = msg.createdAt;
+    cur.lastAt = m.createdAt;
     cur.unread[other] = (cur.unread[other] ?? 0) + 1;
     await saveChatRoom(cur);
+    return m;
   });
   return json({ message: msg }, 201);
 });
