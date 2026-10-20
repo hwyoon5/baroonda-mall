@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { discountRate, todayDeals } from "@/data/mall";
 import Countdown from "./Countdown";
 import PiPrice, { formatPi } from "./PiPrice";
@@ -12,9 +13,9 @@ export default function TodayDeals() {
           </h2>
           <Countdown />
         </div>
-        <a href="#deals" className="text-xs font-medium text-gray-500">
+        <Link href="/deals" className="tap -m-2 p-2 text-xs font-medium text-gray-500">
           전체보기 &rsaquo;
-        </a>
+        </Link>
       </div>
 
       <ul className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
@@ -22,8 +23,8 @@ export default function TodayDeals() {
           const rate = discountRate(d.pricePi, d.originalPi);
           return (
             <li key={d.id} className="w-36 shrink-0 snap-start">
-              <a href={`#${d.id}`} className="block">
-                <div className={`relative flex aspect-square items-center justify-center rounded-xl bg-gradient-to-br text-6xl ${d.bg}`}>
+              <Link href={`/product/${d.id}`} className="tap block">
+                <div className={`relative flex aspect-square items-center justify-center rounded-xl bg-gradient-to-br text-6xl ${d.gradient}`}>
                   {d.emoji}
                   <span className="absolute left-0 top-0 rounded-br-xl rounded-tl-xl bg-red-500 px-2 py-1 text-xs font-extrabold text-white">
                     {rate}%
@@ -36,7 +37,7 @@ export default function TodayDeals() {
                   <div className="h-full rounded-full bg-pi" style={{ width: `${d.soldPercent}%` }} />
                 </div>
                 <p className="mt-1 text-[10px] font-medium text-pi">{d.soldPercent}% 판매</p>
-              </a>
+              </Link>
             </li>
           );
         })}

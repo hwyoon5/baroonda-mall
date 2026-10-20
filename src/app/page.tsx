@@ -1,4 +1,3 @@
-import BottomNav from "@/components/BottomNav";
 import CategoryGrid from "@/components/CategoryGrid";
 import P2PMarket from "@/components/P2PMarket";
 import ProductGrid from "@/components/ProductGrid";
@@ -7,7 +6,7 @@ import TodayDeals from "@/components/TodayDeals";
 
 export default function Home() {
   return (
-    <div className="mx-auto min-h-dvh max-w-md bg-gray-100 pb-20 shadow-xl">
+    <>
       <SearchHeader />
       <main>
         <div className="bg-white px-4 pt-3">
@@ -21,10 +20,9 @@ export default function Home() {
         </div>
         <CategoryGrid />
         <TodayDeals />
-        <P2PMarket />
+        <P2PMarket limit={3} />
         <ProductGrid />
       </main>
-      <BottomNav />
-    </div>
+    </>
   );
 }

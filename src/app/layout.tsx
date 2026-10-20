@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import BottomNav from "@/components/BottomNav";
+import { StoreProvider } from "@/components/store/StoreProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,7 +21,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <StoreProvider>
+          <div className="mx-auto min-h-dvh max-w-md bg-gray-100 pb-20 shadow-xl">{children}</div>
+          <BottomNav />
+        </StoreProvider>
+      </body>
     </html>
   );
 }

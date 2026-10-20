@@ -25,8 +25,14 @@
   }
 }
 
-html {
-  scroll-behavior: smooth;
+a,
+button,
+label,
+[role="button"],
+[role="tab"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgb(107 63 160 / 0.12);
+  cursor: pointer;
 }
 
 body {
@@ -38,4 +44,12 @@ body {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+.tap {
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+.tap:active {
+  transform: scale(0.97);
+  opacity: 0.85;
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatTimeAgo, type P2PListing } from "@/data/p2p";
 import PiPrice from "./PiPrice";
 import SellerInfo from "./SellerInfo";
@@ -14,7 +15,7 @@ export default function P2PListingCard({ item }: { item: P2PListing }) {
   const sold = item.status === "sold";
 
   return (
-    <a href={`#${item.id}`} className={`flex gap-3 py-3.5 ${sold ? "opacity-60" : ""}`}>
+    <Link href={`/market/${item.id}`} className={`tap flex gap-3 py-3.5 ${sold ? "opacity-60" : ""}`}>
       <div
         className={`relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl text-5xl ${item.bg ?? "bg-gray-100"}`}
       >
@@ -71,6 +72,6 @@ export default function P2PListingCard({ item }: { item: P2PListing }) {
           </span>
         </div>
       </div>
-    </a>
+    </Link>
   );
 }
