@@ -1,5 +1,7 @@
 # 바로온다 개발 표준: Pi 공식 데모 앱 기준
 
+> 전체 설계 기준(UI/UX·커머스 구조·Pi 연동)은 [PRODUCT_STANDARD.md](./PRODUCT_STANDARD.md)를 먼저 본다. 이 문서는 그중 로그인·결제 부분이다.
+
 이 프로젝트의 Pi 플랫폼 연동, 코드 구조, 개발 절차는 [Pi 공식 데모 앱](https://github.com/pi-apps/demo)과 [FLOWS.md](https://github.com/pi-apps/demo/blob/main/FLOWS.md)를 기준으로 한다.
 스택은 Next.js(App Router) + Tailwind + Vercel을 유지하며, 데모의 `frontend/`는 `src/app`·`src/components`·`src/hooks`에, `backend/`는 `src/app/api`(Route Handlers)·`src/lib/server`에 대응한다.
 

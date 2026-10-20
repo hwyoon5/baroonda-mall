@@ -46,3 +46,7 @@ PI_MOCK=1 NEXT_PUBLIC_PI_MOCK=1 npm run dev
 ```
 
 > `demo*` 상품은 화면 예시용이며 구매할 수 없습니다.
+
+## 설계 표준
+- [docs/PRODUCT_STANDARD.md](docs/PRODUCT_STANDARD.md): 당근마켓·쿠팡 모바일 UX + Shopify 상품·재고·주문 구조 + Pi 공식 데모 로그인·결제
+- [docs/PI_STANDARD.md](docs/PI_STANDARD.md): Pi 인증·결제 연동 상세
