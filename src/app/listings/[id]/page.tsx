@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const listing = await getListing((await params).id);
-  if (!listing) notFound();
+  if (!listing || listing.status === "draft") notFound();
   const category = findCategory(listing.category);
   const rate = discountRate(listing.pricePi, listing.originalPricePi);
 

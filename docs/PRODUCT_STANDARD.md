@@ -41,19 +41,19 @@
 | Shopify | 바로온다 현재 (`src/lib/types.ts`) | 목표 |
 | --- | --- | --- |
 | Product | `Listing` | 그대로 |
-| Product status (active / draft / archived) | `status`: selling / paused / sold (+ reserved) | `draft`(임시저장) 추가 |
+| Product status (active / draft / archived) | `status`: draft / selling / paused / sold (+ reserved) | ✅ 임시저장 구현 |
 | Product type / condition | `condition`: used(개인 중고) / new(정식 판매) | 그대로 |
-| Options + Variants (조합별 가격·SKU·재고) | `options[]`만 있고 재고는 상품 단위 `stock` | `variants[]`: `{ id, options, pricePi?, stock }` |
-| Inventory (available / committed) | approve 시 `stock -= 1` | `available`과 `committed` 분리. approve 시 committed, complete 시 확정, cancel 시 되돌림 |
+| Options + Variants (조합별 가격·SKU·재고) | `options[]` + `variants[]: { id, options, stock, committed }` (최대 50조합) | ✅ 조합별 재고 구현 (조합별 가격·SKU는 다음 단계) |
+| Inventory (available / committed) | `stock`(available) / `committed` 분리, `withLock`으로 원자적 처리 | ✅ approve 시 committed, complete 시 확정, cancel 시 되돌림 |
 | Collections | 카테고리 | 그대로 (+ 기획전) |
 | Order financial_status (pending / authorized / paid / refunded) | `OrderStatus` created / approved / paid / cancelled | `refunded` 추가 (A2U 환불) |
-| Order fulfillment_status + Fulfillment(tracking) | shipped | 송장번호·택배사 `fulfillment` 필드 |
+| Order fulfillment_status + Fulfillment(tracking) | `shipped` + `order.fulfillment { method, carrier, trackingNumber }` | ✅ 송장 등록 구현 |
 | Payout | `payout: "pending"` | Pi A2U 송금으로 실제 정산 |
 
 ### 재고 원칙
 - 재고 변경은 서버에서만 한다(`src/lib/server/orders.ts`, `PATCH /api/listings/[id]`). 클라이언트 값은 신뢰하지 않는다.
 - 재고 차감은 Pi 결제 **approve** 시점에 한다(결제를 보장받는 시점). 취소나 미완료 결제가 생기면 반드시 복구한다.
-- 동시 결제로 재고보다 많이 팔리지 않도록, 재고 차감은 원자적으로 처리해야 한다(목표: Redis Lua/트랜잭션).
+- 재고·주문 상태 변경은 `withLock`(Redis `SET NX PX` 락, 개발 환경은 메모리 락) 안에서만 한다. 주문 락 → 상품 락 순서로만 잡는다.
 
 ---
 
@@ -76,11 +76,12 @@
 
 ## 4. 개선 로드맵 (우선순위)
 
-1. **P1 · 커머스 정합성**
+1. **P1 · 커머스 정합성** ✅ 완료
    - 옵션 조합별 재고(`variants`)
    - 원자적 재고 차감과 committed 분리
    - 발송 시 송장번호 입력
    - 상품 임시저장(`draft`)
+   - 다음 단계: 조합별 가격·SKU, 판매 중 상품 수정, 오래 방치된 승인(committed) 자동 해제
 2. **P2 · 국내 UX**
    - 중고 목록을 당근식 리스트 카드로
    - 동네·관심 수 표시

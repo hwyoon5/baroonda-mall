@@ -1,10 +1,7 @@
-import { isListingCategory } from "@/lib/categories";
 import { listListings, newId, saveListing } from "@/lib/server/db";
-import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
-import { isUsageGrade, type Listing, type ListingOption, type TradeMethod } from "@/lib/types";
-
-const MAX_IMAGES = 3;
-const MAX_IMAGE_CHARS = 400_000;
+import { handle, json, readJson, requireUser } from "@/lib/server/http";
+import { parseListingInput, type ListingInput } from "@/lib/server/listing-input";
+import type { Listing } from "@/lib/types";
 
 export const GET = handle(async (req) => {
   const p = new URL(req.url).searchParams;
@@ -16,98 +13,21 @@ export const GET = handle(async (req) => {
     sellerUid: seller === "me" ? requireUser(req).uid : (seller ?? undefined),
     dealsOnly: p.get("deals") === "1",
     includeSold: p.get("includeSold") === "1" || seller === "me",
+    includeDrafts: seller === "me",
   });
   return json({ listings });
 });
 
-const MAX_OPTIONS = 3;
-const MAX_OPTION_VALUES = 10;
-
-function parseOptions(v: unknown): ListingOption[] | undefined {
-  if (v == null) return undefined;
-  if (!Array.isArray(v) || v.length > MAX_OPTIONS) throw new HttpError(400, `옵션은 최대 ${MAX_OPTIONS}개까지 등록할 수 있어요.`);
-  const trim = (x: unknown, max: number) => (typeof x === "string" ? x.trim().slice(0, max) : "");
-  const out = v.map((raw) => {
-    const o = (raw ?? {}) as { name?: unknown; values?: unknown };
-    const name = trim(o.name, 10);
-    const values = Array.isArray(o.values) ? [...new Set(o.values.map((x) => trim(x, 20)).filter(Boolean))].slice(0, MAX_OPTION_VALUES) : [];
-    if (!name || values.length === 0) throw new HttpError(400, "옵션 이름과 값을 모두 입력해 주세요.");
-    return { name, values };
-  });
-  if (new Set(out.map((o) => o.name)).size !== out.length) throw new HttpError(400, "옵션 이름이 겹쳐요.");
-  return out.length ? out : undefined;
-}
-
-type Input = Partial<{
-  title: string;
-  description: string;
-  category: string;
-  condition: string;
-  pricePi: number;
-  originalPricePi: number | null;
-  negotiable: boolean;
-  tradeMethods: string[];
-  meetingPlace: string;
-  location: string;
-  fastShipping: boolean;
-  images: string[];
-  stock: number;
-  options: unknown;
-  usageGrade: string;
-  usageNote: string;
-}>;
-
-const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
-const piAmount = (v: unknown) =>
-  typeof v === "number" && Number.isFinite(v) && v > 0 && v <= 1_000_000 ? Math.round(v * 1e7) / 1e7 : null;
-
+/** 상품 등록. draft: true 면 임시저장(공개 목록에 노출되지 않음) */
 export const POST = handle(async (req) => {
   const seller = requireUser(req);
-  const b = await readJson<Input>(req);
-
-  const title = str(b.title, 40);
-  if (!title) throw new HttpError(400, "제목을 입력해 주세요.");
-  const category = str(b.category, 20);
-  if (!isListingCategory(category)) throw new HttpError(400, "카테고리를 선택해 주세요.");
-  const pricePi = piAmount(b.pricePi);
-  if (pricePi === null) throw new HttpError(400, "판매 가격을 π 단위로 올바르게 입력해 주세요.");
-  const originalPricePi = b.originalPricePi == null ? undefined : piAmount(b.originalPricePi) ?? undefined;
-  const tradeMethods = (b.tradeMethods ?? []).filter((m): m is TradeMethod => m === "direct" || m === "delivery");
-  if (tradeMethods.length === 0) throw new HttpError(400, "거래 방식을 하나 이상 선택해 주세요.");
-
-  // 판매 유형별 입력: 개인 중고 = 1개 + 사용감, 새 상품(정식 판매) = 재고 + 옵션
-  const isNew = b.condition === "new";
-  const stock = isNew ? b.stock : undefined;
-  if (isNew && !(typeof stock === "number" && Number.isInteger(stock) && stock >= 1 && stock <= 9999)) {
-    throw new HttpError(400, "재고 수량은 1~9999개로 입력해 주세요.");
-  }
-  const options = isNew ? parseOptions(b.options) : undefined;
-  if (!isNew && !isUsageGrade(b.usageGrade)) throw new HttpError(400, "사용감을 선택해 주세요.");
-  const usageGrade = !isNew && isUsageGrade(b.usageGrade) ? b.usageGrade : undefined;
-  const images = (b.images ?? []).slice(0, MAX_IMAGES);
-  if (images.some((src) => typeof src !== "string" || !src.startsWith("data:image/") || src.length > MAX_IMAGE_CHARS)) {
-    throw new HttpError(400, "사진 형식이 올바르지 않거나 너무 커요.");
-  }
-
+  const b = await readJson<ListingInput>(req);
+  const draft = b.draft === true;
   const listing: Listing = {
     id: newId("l_"),
-    title,
-    description: str(b.description, 2000),
-    category,
-    condition: isNew ? "new" : "used",
-    pricePi,
-    originalPricePi: originalPricePi && originalPricePi > pricePi ? originalPricePi : undefined,
-    negotiable: !isNew && Boolean(b.negotiable),
-    tradeMethods: [...new Set(tradeMethods)],
-    meetingPlace: tradeMethods.includes("direct") ? str(b.meetingPlace, 60) || undefined : undefined,
-    location: str(b.location, 30) || undefined,
-    fastShipping: tradeMethods.includes("delivery") && Boolean(b.fastShipping),
-    images,
-    ...(isNew ? { stock, soldCount: 0, options } : { usageGrade, usageNote: str(b.usageNote, 300) || undefined }),
-    emoji: "📦",
-    bg: "bg-violet-50",
+    ...parseListingInput(b, draft),
     seller,
-    status: "selling",
+    status: draft ? "draft" : "selling",
     createdAt: new Date().toISOString(),
   };
   await saveListing(listing);

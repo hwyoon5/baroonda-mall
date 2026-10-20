@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { api } from "@/lib/client/api";
 import { listingCategories } from "@/lib/categories";
 import { usageGradeLabel, type Condition, type Listing, type TradeMethod, type UsageGrade } from "@/lib/types";
@@ -9,6 +9,12 @@ import { useStore } from "./store/StoreProvider";
 
 const MAX_PHOTOS = 3;
 const MAX_OPTIONS = 3;
+const MAX_VARIANTS = 50;
+
+const comboKey = (c: Record<string, string>) => JSON.stringify(c);
+/** Shopify처럼 옵션 값의 모든 조합(variant)을 만든다. 서버(listing-input.ts)와 같은 순서 */
+const cartesian = (opts: { name: string; values: string[] }[]) =>
+  opts.reduce<Record<string, string>[]>((acc, o) => acc.flatMap((c) => o.values.map((v) => ({ ...c, [o.name]: v }))), [{}]);
 
 type OptionDraft = { name: string; values: string };
 
@@ -50,7 +56,7 @@ async function compressImage(file: File): Promise<string> {
   }
 }
 
-export default function SellForm() {
+export default function SellForm({ draftId }: { draftId?: string }) {
   const id = useId();
   const router = useRouter();
   const { showToast } = useStore();
@@ -62,6 +68,35 @@ export default function SellForm() {
   const [usageNote, setUsageNote] = useState("");
   const [stock, setStock] = useState("10");
   const [options, setOptions] = useState<OptionDraft[]>([]);
+  const [variantStock, setVariantStock] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(Boolean(draftId));
+
+  // 임시저장한 상품 이어서 작성
+  useEffect(() => {
+    if (!draftId) return;
+    api<{ listing: Listing }>(`/api/listings/${draftId}`)
+      .then(({ listing: l }) => {
+        setKind(l.condition);
+        setTitle(l.title);
+        setCategory(l.category);
+        setPrice(l.pricePi ? String(l.pricePi) : "");
+        setOriginalPrice(l.originalPricePi ? String(l.originalPricePi) : "");
+        setNegotiable(l.negotiable);
+        setMethods(l.tradeMethods);
+        setFastShipping(l.fastShipping);
+        setMeetingPlace(l.meetingPlace ?? "");
+        setLocation(l.location ?? "");
+        setDescription(l.description);
+        setPhotos(l.images);
+        if (l.usageGrade) setUsageGrade(l.usageGrade);
+        setUsageNote(l.usageNote ?? "");
+        if (l.stock) setStock(String(l.stock));
+        setOptions((l.options ?? []).map((o) => ({ name: o.name, values: o.values.join(", ") })));
+        setVariantStock(Object.fromEntries((l.variants ?? []).map((v) => [comboKey(v.options), String(v.stock)])));
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "임시저장 상품을 불러오지 못했어요."))
+      .finally(() => setLoading(false));
+  }, [draftId]);
   const [price, setPrice] = useState("");
   const [originalPrice, setOriginalPrice] = useState("");
   const [negotiable, setNegotiable] = useState(false);
@@ -80,10 +115,12 @@ export default function SellForm() {
     .map((o) => ({ name: o.name.trim(), values: [...new Set(o.values.split(",").map((v) => v.trim()).filter(Boolean))] }))
     .filter((o) => o.name || o.values.length);
   const optionsValid = parsedOptions.every((o) => o.name && o.values.length > 0);
+  const combos = isNew && optionsValid && parsedOptions.length ? cartesian(parsedOptions) : [];
+  const variantTotal = combos.reduce((sum, c) => sum + (Number(variantStock[comboKey(c)]) || 0), 0);
   const stockNum = Number(stock);
   const stockValid = Number.isInteger(stockNum) && stockNum >= 1 && stockNum <= 9999;
   const valid =
-    title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0 && (!isNew || (stockValid && optionsValid));
+    title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0 && (!isNew || (optionsValid && (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid)));
   const updateOption = (i: number, patch: Partial<OptionDraft>) => setOptions((cur) => cur.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
   const toggleMethod = (m: TradeMethod) => setMethods((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
@@ -99,19 +136,24 @@ export default function SellForm() {
     }
   };
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!valid || busy) return;
+  const save = async (draft: boolean) => {
+    if (busy || (draft ? !title.trim() : !valid)) return;
     setBusy(true);
     setError("");
     try {
-      const { listing } = await api<{ listing: Listing }>("/api/listings", {
+      const body = {
+        draft,
         title,
         category,
         condition: kind,
         pricePi: priceNum,
         ...(isNew
-          ? { stock: stockNum, options: parsedOptions, originalPricePi: originalPrice ? Number(originalPrice) : null }
+          ? {
+              stock: stockNum,
+              options: parsedOptions,
+              variants: combos.map((c) => ({ options: c, stock: Number(variantStock[comboKey(c)]) || 0 })),
+              originalPricePi: originalPrice ? Number(originalPrice) : null,
+            }
           : { usageGrade, usageNote, negotiable }),
         tradeMethods: methods,
         fastShipping,
@@ -119,15 +161,26 @@ export default function SellForm() {
         location,
         description,
         images: photos,
-      });
-      showToast("판매글이 등록됐어요!");
-      router.replace(`/listings/${listing.id}`);
+      };
+      const { listing } = draftId
+        ? await api<{ listing: Listing }>(`/api/listings/${draftId}`, body, "PUT")
+        : await api<{ listing: Listing }>("/api/listings", body);
+      if (draft) {
+        showToast("임시저장했어요. 내 상품 관리에서 이어서 쓸 수 있어요.");
+        router.replace("/my/listings?tab=draft");
+      } else {
+        showToast("판매글이 등록됐어요!");
+        router.replace(`/listings/${listing.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "등록에 실패했어요.");
       setBusy(false);
     }
   };
-
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void save(false);
+  };
   const label = "mb-1.5 block text-sm font-bold text-gray-900";
   const field = "rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pi focus:outline-none";
   const input =
@@ -248,6 +301,7 @@ export default function SellForm() {
         </fieldset>
       ) : (
         <>
+          {combos.length === 0 && (
           <div>
             <label htmlFor={`${id}-stock`} className={label}>
               재고 수량 <span className="text-red-500">*</span>
@@ -268,6 +322,7 @@ export default function SellForm() {
             </div>
             <p className="mt-1.5 text-[11px] text-gray-500">결제가 승인될 때마다 1개씩 줄고, 0개가 되면 품절로 표시돼요.</p>
           </div>
+          )}
           <fieldset>
             <legend className={label}>
               옵션 <span className="text-xs font-normal text-gray-400">(선택 · 최대 {MAX_OPTIONS}개)</span>
@@ -312,6 +367,44 @@ export default function SellForm() {
             )}
             <p className="mt-1.5 text-[11px] text-gray-500">옵션 값은 쉼표(,)로 구분해요. 구매자는 결제 전에 옵션을 골라요.</p>
           </fieldset>
+          {combos.length > 0 && (
+            <div>
+              <p className={label}>
+                옵션별 재고 <span className="text-red-500">*</span>{" "}
+                <span className="text-xs font-normal text-gray-500">총 {variantTotal}개</span>
+              </p>
+              {combos.length > MAX_VARIANTS ? (
+                <p className="text-xs text-red-500">
+                  옵션 조합이 {combos.length}개예요. 최대 {MAX_VARIANTS}개까지 만들 수 있어요.
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                  {combos.map((c) => {
+                    const k = comboKey(c);
+                    const name = Object.values(c).join(" / ");
+                    return (
+                      <li key={k} className="flex items-center gap-2 px-3 py-2">
+                        <span className="flex-1 text-sm text-gray-800">{name}</span>
+                        <input
+                          aria-label={`${name} 재고`}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={9999}
+                          value={variantStock[k] ?? ""}
+                          onChange={(e) => setVariantStock((cur) => ({ ...cur, [k]: e.target.value }))}
+                          placeholder="0"
+                          className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-right text-sm focus:border-pi focus:outline-none"
+                        />
+                        <span className="text-xs text-gray-500">개</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <p className="mt-1.5 text-[11px] text-gray-500">조합별로 재고를 따로 관리해요. 0개인 조합은 구매자에게 품절로 보여요.</p>
+            </div>
+          )}
         </>
       )}
 
@@ -434,9 +527,23 @@ export default function SellForm() {
       </p>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
-      <button type="submit" disabled={!valid || busy} className="tap w-full rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400">
-        {busy ? "등록 중…" : isNew ? "새 상품 등록하기" : "중고 판매글 등록하기"}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => void save(true)}
+          disabled={!title.trim() || busy || loading}
+          className="tap shrink-0 rounded-xl border border-gray-300 px-4 py-3.5 text-sm font-bold text-gray-700 disabled:opacity-50"
+        >
+          임시저장
+        </button>
+        <button
+          type="submit"
+          disabled={!valid || busy || loading}
+          className="tap flex-1 rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
+        >
+          {busy ? "저장 중…" : isNew ? "새 상품 등록하기" : "중고 판매글 등록하기"}
+        </button>
+      </div>
     </form>
   );
 }

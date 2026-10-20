@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
 import type { Listing, Order } from "../types";
+import { HttpError } from "./http";
 
 /**
  * 저장소: Upstash Redis(REST) 환경변수가 있으면 Redis, 없으면 프로세스 메모리.
@@ -10,11 +11,14 @@ type Kv = {
   hget(hash: string, field: string): Promise<string | null>;
   hset(hash: string, field: string, value: string): Promise<void>;
   hvals(hash: string): Promise<string[]>;
+  /** 성공하면 해제 함수, 이미 잠겨 있으면 null */
+  lock(key: string, ttlMs: number): Promise<(() => Promise<void>) | null>;
 };
 
 function memoryKv(): Kv {
-  const g = globalThis as { __baroondaKv?: Map<string, Map<string, string>> };
+  const g = globalThis as { __baroondaKv?: Map<string, Map<string, string>>; __baroondaLocks?: Set<string> };
   const root = (g.__baroondaKv ??= new Map());
+  const locks = (g.__baroondaLocks ??= new Set());
   const h = (name: string) => {
     let m = root.get(name);
     if (!m) root.set(name, (m = new Map()));
@@ -24,6 +28,11 @@ function memoryKv(): Kv {
     hget: async (hash, field) => h(hash).get(field) ?? null,
     hset: async (hash, field, value) => void h(hash).set(field, value),
     hvals: async (hash) => [...h(hash).values()],
+    lock: async (key) => {
+      if (locks.has(key)) return null;
+      locks.add(key);
+      return async () => void locks.delete(key);
+    },
   };
 }
 
@@ -42,6 +51,13 @@ function redisKv(url: string, token: string): Kv {
     hget: (hash, field) => cmd<string | null>("HGET", hash, field),
     hset: async (hash, field, value) => void (await cmd("HSET", hash, field, value)),
     hvals: (hash) => cmd<string[]>("HVALS", hash),
+    lock: async (key, ttlMs) => {
+      const k = `bo:lock:${key}`;
+      const token = randomUUID();
+      if ((await cmd<string | null>("SET", k, token, "NX", "PX", String(ttlMs))) !== "OK") return null;
+      const unlock = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+      return async () => void (await cmd("EVAL", unlock, "1", k, token));
+    },
   };
 }
 
@@ -52,6 +68,22 @@ const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : memor
 
 const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order" };
 
+/** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
+export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  for (let i = 0; i < 150; i++) {
+    const unlock = await kv.lock(key, 20_000);
+    if (unlock) {
+      try {
+        return await fn();
+      } finally {
+        await unlock().catch(() => undefined);
+      }
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new HttpError(503, "주문이 몰리고 있어요. 잠시 후 다시 시도해 주세요.");
+}
+
 export const newId = (prefix: string) => `${prefix}${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 
 export type ListingFilter = {
@@ -61,6 +93,7 @@ export type ListingFilter = {
   ids?: string[];
   dealsOnly?: boolean;
   includeSold?: boolean;
+  includeDrafts?: boolean;
 };
 
 export async function listListings(f: ListingFilter = {}): Promise<Listing[]> {
@@ -75,6 +108,7 @@ export async function listListings(f: ListingFilter = {}): Promise<Listing[]> {
     const q = f.q.toLowerCase();
     all = all.filter((l) => `${l.title} ${l.description}`.toLowerCase().includes(q));
   }
+  if (!f.includeDrafts) all = all.filter((l) => l.status !== "draft");
   if (!f.includeSold) all = all.filter((l) => l.status !== "sold" && l.status !== "paused");
   return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

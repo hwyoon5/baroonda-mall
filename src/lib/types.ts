@@ -1,9 +1,13 @@
 export type TradeMethod = "direct" | "delivery";
-export type ListingStatus = "selling" | "reserved" | "sold" | "paused";
+export type ListingStatus = "draft" | "selling" | "reserved" | "sold" | "paused";
 export type Condition = "new" | "used";
 
 export type UsageGrade = "S" | "A" | "B" | "C";
 export type ListingOption = { name: string; values: string[] };
+/** Shopify Variant: 옵션 조합별 재고. stock = 판매 가능(available), committed = 결제 승인 후 확정 대기 */
+export type Variant = { id: string; options: Record<string, string>; stock: number; committed?: number };
+
+export const carriers = ["CJ대한통운", "우체국택배", "한진택배", "롯데택배", "로젠택배", "기타"] as const;
 
 /** condition = 판매 유형: used → 개인 중고(1개), new → 새 상품(정식 판매, 재고·옵션) */
 export const listingKindLabel: Record<Condition, string> = { used: "개인 중고", new: "정식 판매" };
@@ -30,6 +34,8 @@ export type Listing = {
   stock?: number;
   soldCount?: number;
   options?: ListingOption[];
+  variants?: Variant[];
+  committed?: number;
   /** 개인 중고 전용 */
   usageGrade?: UsageGrade;
   usageNote?: string;
@@ -57,6 +63,8 @@ export type Order = {
   listingTitle: string;
   listingThumb?: string;
   option?: Record<string, string>;
+  variantId?: string;
+  fulfillment?: { method: TradeMethod; carrier?: string; trackingNumber?: string; shippedAt: string };
   amount: number;
   buyer: PiUser;
   seller: PiUser;
@@ -86,5 +94,6 @@ export function listingStatusText(l: Pick<Listing, "status" | "condition">) {
   if (l.status === "selling") return "판매중";
   if (l.status === "reserved") return "예약중";
   if (l.status === "paused") return "판매중지";
+  if (l.status === "draft") return "임시저장";
   return l.condition === "new" ? "품절" : "거래완료";
 }

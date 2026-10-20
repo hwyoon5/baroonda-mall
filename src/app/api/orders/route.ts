@@ -25,6 +25,13 @@ export const POST = handle(async (req) => {
       selected[o.name] = v;
     }
   }
+  let variantId: string | undefined;
+  if (listing.variants?.length) {
+    const variant = listing.variants.find((v) => Object.entries(v.options).every(([k, val]) => selected?.[k] === val));
+    if (!variant) throw new HttpError(400, "옵션을 선택해 주세요.");
+    if (variant.stock < 1) throw new HttpError(409, "선택한 옵션이 품절됐어요.");
+    variantId = variant.id;
+  }
 
   const now = new Date().toISOString();
   const order: Order = {
@@ -33,6 +40,7 @@ export const POST = handle(async (req) => {
     listingTitle: listing.title,
     listingThumb: listing.images[0] ? undefined : listing.emoji,
     option: selected,
+    variantId,
     amount: listing.pricePi,
     buyer,
     seller: listing.seller,

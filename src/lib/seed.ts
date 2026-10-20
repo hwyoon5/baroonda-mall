@@ -68,7 +68,14 @@ export function demoListings(): Listing[] {
       images: [`/images/listings/demo${i + 1}.jpg`],
       ...(s.used
         ? { usageGrade: "A" as const }
-        : { stock: 12 + i, soldCount: 30 + i * 7, options: s.category === "fashion" ? [{ name: "사이즈", values: ["S", "M", "L", "XL"] }] : undefined }),
+        : s.category === "fashion"
+          ? {
+              stock: 18,
+              soldCount: 30 + i * 7,
+              options: [{ name: "사이즈", values: ["S", "M", "L", "XL"] }],
+              variants: ["S", "M", "L", "XL"].map((v, j) => ({ id: `v${j + 1}`, options: { 사이즈: v }, stock: 3 + j })),
+            }
+          : { stock: 12 + i, soldCount: 30 + i * 7 }),
       emoji: s.emoji,
       bg: s.bg,
       seller: { uid: seller.uid, username: seller.username },

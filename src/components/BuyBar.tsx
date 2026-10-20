@@ -21,6 +21,13 @@ export default function BuyBar({ listing }: { listing: Listing }) {
   const mine = user?.uid === listing.seller.uid;
   const options = listing.options ?? [];
   const allPicked = options.every((o) => picked[o.name]);
+  const variants = listing.variants ?? [];
+  // 다른 옵션 선택과 조합했을 때 재고가 남은 variant가 있는 값만 고를 수 있다.
+  const valueAvailable = (name: string, value: string) =>
+    !variants.length ||
+    variants.some((v) => v.options[name] === value && v.stock > 0 && Object.entries(picked).every(([k, pv]) => k === name || v.options[k] === pv));
+  const selectedVariant = variants.length && allPicked ? variants.find((v) => Object.entries(v.options).every(([k, val]) => picked[k] === val)) : undefined;
+  const variantSoldOut = Boolean(variants.length && allPicked && (!selectedVariant || selectedVariant.stock < 1));
 
   const pay = async () => {
     setBusy(true);
@@ -92,15 +99,18 @@ export default function BuyBar({ listing }: { listing: Listing }) {
                   <div className="flex flex-wrap gap-2">
                     {o.values.map((v) => {
                       const on = picked[o.name] === v;
+                      const available = valueAvailable(o.name, v);
                       return (
                         <button
                           key={v}
                           type="button"
                           aria-pressed={on}
+                          disabled={!available && !on}
                           onClick={() => setPicked((cur) => ({ ...cur, [o.name]: v }))}
-                          className={`tap rounded-lg border px-3 py-2 text-sm ${on ? "border-pi bg-pi text-white" : "border-gray-200 text-gray-700"}`}
+                          className={`tap rounded-lg border px-3 py-2 text-sm ${on ? "border-pi bg-pi text-white" : available ? "border-gray-200 text-gray-700" : "border-gray-100 text-gray-300 line-through"}`}
                         >
                           {v}
+                          {!available && <span className="ml-1 text-[10px] no-underline">품절</span>}
                         </button>
                       );
                     })}
@@ -108,13 +118,16 @@ export default function BuyBar({ listing }: { listing: Listing }) {
                 </fieldset>
               ))}
             </div>
+            {selectedVariant && selectedVariant.stock > 0 && (
+              <p className="mt-4 text-xs text-gray-500">선택한 옵션 남은 수량 {selectedVariant.stock}개</p>
+            )}
             <button
               type="button"
               onClick={() => void pay()}
-              disabled={!allPicked || busy}
+              disabled={!allPicked || busy || variantSoldOut}
               className="tap mt-5 w-full rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
             >
-              {busy ? "결제 진행 중…" : allPicked ? `π ${listing.pricePi} 결제하기` : "옵션을 모두 선택해 주세요"}
+              {busy ? "결제 진행 중…" : !allPicked ? "옵션을 모두 선택해 주세요" : variantSoldOut ? "선택한 옵션은 품절이에요" : `π ${listing.pricePi} 결제하기`}
             </button>
           </div>
         </div>
