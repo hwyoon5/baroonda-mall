@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, TOKEN_KEY } from "@/lib/client/api";
-import { initPiSdk, PI_MOCK, piAuthenticate, resetPiAuth } from "@/lib/client/pi-sdk";
+import { flushIncompletePayment, initPiSdk, markPiSdkFailed, PI_MOCK, piAuthenticate, resetPiAuth } from "@/lib/client/pi-sdk";
 import type { PiUser } from "@/lib/types";
 import SignIn from "./SignIn";
 
@@ -47,6 +47,7 @@ export function PiProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(TOKEN_KEY, r.token);
     setUser(r.user);
     setShowSignIn(false);
+    void flushIncompletePayment();
     return r.user;
   }, []);
 
@@ -86,7 +87,7 @@ export function PiProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {!PI_MOCK && <Script src="https://sdk.minepi.com/pi-sdk.js" strategy="afterInteractive" onLoad={initPiSdk} />}
+      {!PI_MOCK && <Script src="https://sdk.minepi.com/pi-sdk.js" strategy="afterInteractive" onLoad={initPiSdk} onError={markPiSdkFailed} />}
       {children}
       {showSignIn && <SignIn onSignIn={signIn} onModalClose={closeSignIn} disabled={isLoading} error={error} />}
     </AuthContext.Provider>

@@ -40,3 +40,15 @@ PR을 `main`에 머지하기 전에 아래를 Vercel 프로젝트(`taxitago/baro
 - [ ] `/api/health` → `ok: true`, `storage: "redis"`, `warnings: []`
 - [ ] Pi Browser에서 로그인 → 상품 등록 → 다른 계정으로 결제 → 발송 → 구매 확정 → `/my/payouts`에 정산 완료
 - [ ] 소액으로 환불(발송 전 취소) 1회
+
+## 5. Pi Browser 로그인이 안 될 때
+
+| 증상 | 원인 / 조치 |
+|---|---|
+| "Pi 로그인 연동은 준비 중이에요" | 운영(`main`)에 Pi 로그인 코드가 아직 없음 → 이 PR 머지 |
+| "Pi 인증 응답이 없어요" (60초) | Pi Browser가 아닌 브라우저이거나, 개발자 포털의 App URL·Development URL이 접속한 주소와 다름 |
+| Pi Browser에서 아무 반응 없음 | `NEXT_PUBLIC_PI_SANDBOX=true`로 배포됨 → Pi Browser에서는 `false`(Sandbox는 데스크톱 `sandbox.minepi.com` 전용) 후 Redeploy |
+| "세션 서명 키(SESSION_SECRET)…" (503) | `SESSION_SECRET` 미설정 |
+| "Pi 서버에 연결하지 못했어요" (502) | `api.minepi.com` 일시 장애/타임아웃 → 재시도 |
+
+로그인 자체(`/v2/me` 검증)는 `PI_API_KEY` 없이도 되지만, 결제·정산에는 필요합니다.

@@ -21,6 +21,9 @@ async function piFetch<T>(path: string, auth: string, init: RequestInit = {}): P
     ...init,
     headers: { Authorization: auth, "Content-Type": "application/json" },
     cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
+  }).catch((e: unknown) => {
+    throw new PiApiError(502, { error: "pi_unreachable", message: e instanceof Error ? e.name : "fetch failed" });
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new PiApiError(res.status, body);

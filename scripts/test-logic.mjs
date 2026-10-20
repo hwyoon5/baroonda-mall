@@ -213,6 +213,13 @@ test("거래 후기: 구매 확정한 구매자만 1회, 판매자 프로필 평
 });
 
 let failed = 0;
+test("Pi 로그인: 실제 Pi API(/v2/me)로 토큰 검증, 미완료 결제는 세션 필요", async () => {
+  const bad = await call("/api/user/signin", { authResult: { accessToken: "invalid-token", user: { uid: "x" } } });
+  assert.equal(bad.status, 401, JSON.stringify(bad.data));
+  assert.equal((await call("/api/user/signin", {})).status, 400);
+  assert.equal((await call("/api/payments/incomplete", { payment: { identifier: "p1" } })).status, 401);
+});
+
 const act = (orderId, action, token, extra = {}) => call(`/api/orders/${orderId}`, { action, ...extra }, token);
 
 test("정산(A2U): 구매 확정 시 판매자에게 1회 송금, 동시 확정에도 중복 없음", async () => {
