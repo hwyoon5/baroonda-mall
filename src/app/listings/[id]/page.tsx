@@ -8,7 +8,7 @@ import SubHeader from "@/components/SubHeader";
 import TradeMethodTag from "@/components/TradeMethodTag";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
-import { getListing } from "@/lib/server/db";
+import { getListing, listReviewsForSeller } from "@/lib/server/db";
 import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +16,8 @@ export const dynamic = "force-dynamic";
 export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const listing = await getListing((await params).id);
   if (!listing || listing.status === "draft") notFound();
+  const sellerReviews = await listReviewsForSeller(listing.seller.uid);
+  const sellerRating = sellerReviews.length ? (sellerReviews.reduce((a, r) => a + r.rating, 0) / sellerReviews.length).toFixed(1) : null;
   const category = findCategory(listing.category);
   const rate = discountRate(listing.pricePi, listing.originalPricePi);
 
@@ -34,7 +36,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       )}
 
       <section className="bg-white px-4 py-4">
-        <SellerInfo seller={listing.seller} location={listing.location} createdAt={listing.createdAt} />
+        <Link href={`/sellers/${encodeURIComponent(listing.seller.uid)}`} className="tap flex items-center justify-between gap-2">
+          <SellerInfo seller={listing.seller} location={listing.location} createdAt={listing.createdAt} />
+          <span className="shrink-0 text-xs text-gray-500">
+            {sellerReviews.length ? <span className="font-bold text-amber-500">★ {sellerRating} </span> : null}
+            후기 {sellerReviews.length} · 프로필 ›
+          </span>
+        </Link>
         <div className="mt-3 text-xs text-gray-400">
           {category && (
             <Link href={category.href} className="tap underline-offset-2 hover:underline">

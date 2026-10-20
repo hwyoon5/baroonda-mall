@@ -183,6 +183,35 @@ test("1:1 채팅: 방 생성(중복 없음)·메시지·안 읽음·권한", asy
   assert.equal(bl.rooms.find((r) => r.id === room.id).lastMessage, "네 가능해요");
 });
 
+test("거래 후기: 구매 확정한 구매자만 1회, 판매자 프로필 평균 반영", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "후기 상품", stock: 2 }, seller);
+  const order = await buy(b1, l.id);
+  assert.equal((await call(`/api/orders/${order.id}/review`, { rating: 5 }, b1)).status, 409, "확정 전");
+  await ok(`/api/orders/${order.id}`, { action: "ship", method: "direct" }, seller);
+  await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1);
+  assert.equal((await call(`/api/orders/${order.id}/review`, { rating: 5 }, seller)).status, 404, "판매자는 작성 불가");
+  assert.equal((await call(`/api/orders/${order.id}/review`, { rating: 5 }, b2)).status, 404, "타인 작성 불가");
+  assert.equal((await call(`/api/orders/${order.id}/review`, { rating: 6 }, b1)).status, 400, "별점 범위");
+  assert.equal((await call(`/api/orders/${order.id}/review`, { rating: 2.5 }, b1)).status, 400, "정수 별점");
+  const [r1, r2] = await Promise.all([1, 2].map(() => call(`/api/orders/${order.id}/review`, { rating: 4, text: "친절해요" }, b1)));
+  assert.deepEqual([r1.status, r2.status].sort(), [201, 409], "주문당 1회(동시 요청)");
+  assert.equal((await ok(`/api/orders/${order.id}/review`, undefined, seller)).review.rating, 4);
+  const order2 = await buy(b2, l.id);
+  await ok(`/api/orders/${order2.id}`, { action: "ship", method: "direct" }, seller);
+  await ok(`/api/orders/${order2.id}`, { action: "confirm" }, b2);
+  await ok(`/api/orders/${order2.id}/review`, { rating: 5 }, b2);
+  const uid = order.seller.uid;
+  const p = await ok(`/api/sellers/${encodeURIComponent(uid)}`);
+  assert.equal(p.stats.reviews, 2);
+  assert.equal(p.stats.rating, 4.5);
+  assert.ok(p.listings.some((x) => x.id === l.id));
+  assert.equal(p.reviews[0].buyer.uid !== uid, true);
+  assert.equal((await call("/api/sellers/nobody-xyz")).status, 404);
+  assert.equal((await fetch(`${BASE}/sellers/${encodeURIComponent(uid)}`)).status, 200, "프로필 페이지");
+  const used = await (await fetch(`${BASE}/category/used`)).text();
+  assert.ok(used.includes("h-24 w-24"), "중고 카테고리는 리스트형");
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
-import type { ChatMessage, ChatRoom, Listing, Order } from "../types";
+import type { ChatMessage, ChatRoom, Listing, Order, Review } from "../types";
 import { HttpError } from "./http";
 
 /**
@@ -66,7 +66,7 @@ const redisToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_RE
 export const storageMode: "redis" | "memory" = redisUrl && redisToken ? "redis" : "memory";
 const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : memoryKv();
 
-const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index" };
+const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
 export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -180,4 +180,21 @@ export async function addChatMessage(msg: ChatMessage) {
 
 export async function listChatMessages(roomId: string) {
   return (await kv.hvals(chatMsgs(roomId))).map((v) => JSON.parse(v) as ChatMessage).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+// ---------- 거래 후기 (key = orderId, 주문당 1개) ----------
+export async function getReviewByOrder(orderId: string): Promise<Review | undefined> {
+  const raw = await kv.hget(K.reviews, orderId);
+  return raw ? (JSON.parse(raw) as Review) : undefined;
+}
+
+export async function saveReview(review: Review) {
+  await kv.hset(K.reviews, review.orderId, JSON.stringify(review));
+}
+
+export async function listReviewsForSeller(sellerUid: string) {
+  return (await kv.hvals(K.reviews))
+    .map((v) => JSON.parse(v) as Review)
+    .filter((r) => r.sellerUid === sellerUid)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

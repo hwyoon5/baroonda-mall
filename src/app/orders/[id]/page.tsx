@@ -5,6 +5,7 @@ import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
 import PiPrice from "@/components/PiPrice";
+import ReviewBox from "@/components/ReviewBox";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useAuth } from "@/hooks/useAuth";
@@ -131,6 +132,8 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
               </p>
             )}
           </section>
+
+          {order.status === "completed" && <div className="mt-2"><ReviewBox orderId={order.id} canWrite={!isSeller} /></div>}
 
           <div className="space-y-2 p-4">
             {isSeller && order.status === "paid" && (

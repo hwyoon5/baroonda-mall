@@ -116,3 +116,16 @@ export type ChatRoom = {
 };
 
 export type ChatMessage = { id: string; roomId: string; senderUid: string; text: string; createdAt: string };
+
+/** 구매 확정 후 구매자가 남기는 거래 후기 (주문당 1개) */
+export type Review = {
+  id: string;
+  orderId: string;
+  listingId: string;
+  listingTitle: string;
+  sellerUid: string;
+  buyer: PiUser;
+  rating: number;
+  text: string;
+  createdAt: string;
+};
