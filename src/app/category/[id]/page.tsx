@@ -1,22 +1,20 @@
 import { notFound } from "next/navigation";
-import ProductGrid from "@/components/ProductGrid";
+import ListingGrid from "@/components/ListingGrid";
 import SubHeader from "@/components/SubHeader";
-import { findCategory, productCategories, productsInCategory } from "@/data/mall";
+import { findCategory } from "@/lib/categories";
+import { listListings } from "@/lib/server/db";
 
-export function generateStaticParams() {
-  return productCategories.map((c) => ({ id: c.id }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function CategoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const category = findCategory(id);
   if (!category) notFound();
-  const items = productsInCategory(id);
-
+  const items = await listListings({ category: id });
   return (
     <>
       <SubHeader title={category.name} />
-      <ProductGrid title={`${category.name} ${items.length}개`} items={items} emptyText="준비 중인 상품이에요." />
+      <ListingGrid items={items} layout={id === "used" ? "list" : "grid"} emptyText={`${category.name}에 등록된 상품이 아직 없어요.`} />
     </>
   );
 }

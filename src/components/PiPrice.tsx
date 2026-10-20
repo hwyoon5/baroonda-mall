@@ -1,24 +1,15 @@
-type Size = "sm" | "md" | "lg";
+import { formatPi } from "@/lib/format";
+
+type Size = "sm" | "md" | "lg" | "xl";
 
 const sizes: Record<Size, { amount: string; symbol: string }> = {
   sm: { amount: "text-sm", symbol: "text-xs" },
   md: { amount: "text-base", symbol: "text-sm" },
   lg: { amount: "text-lg", symbol: "text-base" },
+  xl: { amount: "text-2xl", symbol: "text-lg" },
 };
 
-export function formatPi(value: number) {
-  return value.toLocaleString("ko-KR", { maximumFractionDigits: 4 });
-}
-
-export default function PiPrice({
-  value,
-  size = "md",
-  className = "",
-}: {
-  value: number;
-  size?: Size;
-  className?: string;
-}) {
+export default function PiPrice({ value, size = "md", className = "" }: { value: number; size?: Size; className?: string }) {
   const s = sizes[size];
   return (
     <span className={`relative inline-flex items-baseline gap-0.5 font-extrabold text-gray-900 ${className}`}>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { categories as defaultCategories, type Category } from "@/data/mall";
+import { homeCategories as defaultCategories, type Category } from "@/lib/categories";
 
 export default function CategoryGrid({ items = defaultCategories }: { items?: Category[] }) {
   return (

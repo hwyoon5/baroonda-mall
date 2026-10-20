@@ -1,12 +1,14 @@
-import ProductGrid from "@/components/ProductGrid";
+import ListingGrid from "@/components/ListingGrid";
 import SubHeader from "@/components/SubHeader";
-import { todayDeals } from "@/data/mall";
+import { listListings } from "@/lib/server/db";
 
-export default function DealsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function DealsPage() {
   return (
     <>
       <SubHeader title="오늘의 특가" />
-      <ProductGrid title={null} items={todayDeals} />
+      <ListingGrid items={await listListings({ dealsOnly: true })} emptyText="할인 중인 상품이 없어요." />
     </>
   );
 }
