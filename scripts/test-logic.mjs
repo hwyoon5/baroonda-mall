@@ -395,6 +395,12 @@ test("쇼츠: 등록·내 상품 연결·숨김·삭제·권한, 피드/관리 �
   assert.equal(f.listing.title, "쇼츠 상품");
   assert.equal(f.listing.pricePi, 3);
   assert.equal((await call(`/api/shorts/${short.id}`, { status: "hidden" }, b1, "PATCH")).status, 404, "남의 쇼츠 수정 불가");
+  const noPoster = (await ok("/api/shorts", { videoUrl: vid }, seller)).short;
+  assert.equal((await call(`/api/shorts/${noPoster.id}`, { posterUrl: "https://evil.example.com/listings/photo/p.jpg" }, seller, "PATCH")).status, 400, "외부 포스터 보충 불가");
+  assert.equal((await call(`/api/shorts/${noPoster.id}`, { posterUrl: poster }, b1, "PATCH")).status, 404, "남의 쇼츠 포스터 불가");
+  assert.equal((await ok(`/api/shorts/${noPoster.id}`, { posterUrl: poster }, seller, "PATCH")).short.posterUrl, poster, "나중에 포스터 보충");
+  assert.equal((await ok("/api/shorts")).shorts.find((s) => s.id === noPoster.id).posterUrl, poster, "피드에도 포스터");
+  await ok(`/api/shorts/${noPoster.id}`, undefined, seller, "DELETE");
   await ok(`/api/shorts/${short.id}`, { status: "hidden" }, seller, "PATCH");
   assert.equal(await inFeed(), undefined, "숨김은 피드 제외");
   assert.equal((await ok("/api/shorts?author=me", undefined, seller)).shorts.find((s) => s.id === short.id).status, "hidden");
