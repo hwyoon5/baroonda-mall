@@ -10,7 +10,7 @@ import LoginCard from "@/components/pi/LoginCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useStore } from "@/components/store/StoreProvider";
 import { api } from "@/lib/client/api";
-import { carriers, type Order, type OrderStatus, type TradeMethod } from "@/lib/types";
+import { carriers, isTrackingNumber, type Order, type OrderStatus, type TradeMethod } from "@/lib/types";
 
 const steps: { status: OrderStatus; label: string }[] = [
   { status: "paid", label: "π 결제 완료" },
@@ -172,14 +172,18 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
                       inputMode="numeric"
                       value={tracking}
                       onChange={(e) => setTracking(e.target.value)}
+                      maxLength={24}
                       placeholder="송장번호 (숫자)"
                       className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pi focus:outline-none"
                     />
                   </div>
                 )}
+                {shipMethod === "delivery" && tracking.trim() !== "" && !isTrackingNumber(tracking) && (
+                  <p className="text-xs text-red-500">송장번호는 숫자와 - 로 8~20자 입력해 주세요.</p>
+                )}
                 <button
                   type="button"
-                  disabled={busy || (shipMethod === "delivery" && (!carrier || tracking.replace(/\D/g, "").length < 8))}
+                  disabled={busy || (shipMethod === "delivery" && (!carrier || !isTrackingNumber(tracking)))}
                   onClick={() => act("ship", { method: shipMethod, carrier, trackingNumber: tracking })}
                   className="tap w-full rounded-xl bg-pi py-3 text-sm font-bold text-white disabled:opacity-60"
                 >

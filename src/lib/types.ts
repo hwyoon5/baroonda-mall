@@ -8,6 +8,8 @@ export type ListingOption = { name: string; values: string[] };
 export type Variant = { id: string; options: Record<string, string>; stock: number; committed?: number };
 
 export const carriers = ["CJ대한통운", "우체국택배", "한진택배", "롯데택배", "로젠택배", "기타"] as const;
+/** 송장번호: 숫자와 하이픈 8~20자 (클라이언트·서버 공통 규칙) */
+export const isTrackingNumber = (v: string) => /^[0-9-]{8,20}$/.test(v.replace(/\s/g, ""));
 
 /** condition = 판매 유형: used → 개인 중고(1개), new → 새 상품(정식 판매, 재고·옵션) */
 export const listingKindLabel: Record<Condition, string> = { used: "개인 중고", new: "정식 판매" };

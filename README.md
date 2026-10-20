@@ -50,3 +50,10 @@ PI_MOCK=1 NEXT_PUBLIC_PI_MOCK=1 npm run dev
 ## 설계 표준
 - [docs/PRODUCT_STANDARD.md](docs/PRODUCT_STANDARD.md): 당근마켓·쿠팡 모바일 UX + Shopify 상품·재고·주문 구조 + Pi 공식 데모 로그인·결제
 - [docs/PI_STANDARD.md](docs/PI_STANDARD.md): Pi 인증·결제 연동 상세
+
+## 핵심 로직 테스트
+브라우저 없이 API로 재고·결제·임시저장·발송 규칙을 검증합니다.
+
+```bash
+PI_MOCK=1 NEXT_PUBLIC_PI_MOCK=1 npm run build && npm run test:logic
+```

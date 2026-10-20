@@ -1,6 +1,6 @@
 import { getListing, getOrder, saveListing, saveOrder, withLock } from "@/lib/server/db";
 import { listingLock } from "@/lib/server/orders";
-import { carriers } from "@/lib/types";
+import { carriers, isTrackingNumber } from "@/lib/types";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -31,7 +31,7 @@ export const POST = handle<Ctx>(async (req, ctx) => {
     const trackingNumber = typeof b.trackingNumber === "string" ? b.trackingNumber.replace(/\s/g, "") : "";
     if (method === "delivery") {
       if (!(carriers as readonly string[]).includes(carrier)) throw new HttpError(400, "택배사를 선택해 주세요.");
-      if (!/^[0-9-]{8,20}$/.test(trackingNumber)) throw new HttpError(400, "송장번호를 숫자 8~20자리로 입력해 주세요.");
+      if (!isTrackingNumber(trackingNumber)) throw new HttpError(400, "송장번호는 숫자와 - 로 8~20자 입력해 주세요.");
     }
     order.fulfillment = { method, ...(method === "delivery" ? { carrier, trackingNumber } : {}), shippedAt: new Date().toISOString() };
     order.status = "shipped";

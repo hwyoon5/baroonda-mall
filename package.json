@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:logic": "node scripts/test-logic.mjs"
   },
   "dependencies": {
     "react": "19.1.0",
