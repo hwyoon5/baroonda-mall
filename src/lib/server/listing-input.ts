@@ -1,6 +1,6 @@
 import { isListingCategory } from "@/lib/categories";
 import { isUsageGrade, type Listing, type ListingOption, type TradeMethod, type Variant } from "@/lib/types";
-import { isBlobUrl, MAX_PHOTOS } from "@/lib/media";
+import { isBlobUrl, MAX_PHOTOS, MAX_VIDEOS } from "@/lib/media";
 import { HttpError } from "./http";
 
 /** Blob 미연결 시 사진은 data URL로 저장된다. Vercel 함수 요청 한도(4.5MB) 아래로 묶는다. */
@@ -23,7 +23,7 @@ export type ListingInput = Partial<{
   location: string;
   fastShipping: boolean;
   images: string[];
-  video: string | null;
+  videos: string[];
   stock: number;
   options: unknown;
   variants: unknown;
@@ -104,7 +104,9 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
   if (images.filter(inline).reduce((n, src) => n + src.length, 0) > MAX_INLINE_TOTAL_CHARS) {
     throw new HttpError(400, "사진 용량이 너무 커요. 장수를 줄여 주세요.");
   }
-  if (b.video && !isBlobUrl(b.video, "video")) throw new HttpError(400, "동영상 형식이 올바르지 않아요.");
+  const videos = b.videos ?? [];
+  if (!Array.isArray(videos) || videos.length > MAX_VIDEOS) throw new HttpError(400, `동영상은 최대 ${MAX_VIDEOS}개까지 올릴 수 있어요.`);
+  if (!videos.every((src) => isBlobUrl(src, "video"))) throw new HttpError(400, "동영상 형식이 올바르지 않아요.");
   const price = pricePi ?? 0;
   return {
     title,
@@ -119,7 +121,7 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
     location: str(b.location, 30) || undefined,
     fastShipping: tradeMethods.includes("delivery") && Boolean(b.fastShipping),
     images,
-    video: b.video || undefined,
+    videos: videos.length ? videos : undefined,
     ...(isNew
       ? { stock, committed: 0, soldCount: 0, options, variants }
       : { usageGrade: isUsageGrade(b.usageGrade) ? b.usageGrade : undefined, usageNote: str(b.usageNote, 300) || undefined }),

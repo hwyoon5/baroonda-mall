@@ -33,7 +33,7 @@ PR을 `main`에 머지하기 전에 아래를 Vercel 프로젝트(`taxitago/baro
 
 1. Vercel 프로젝트 → **Storage** → **Create Database** → **Blob** 선택 → 프로젝트에 연결(Production·Preview).
 2. `BLOB_READ_WRITE_TOKEN`이 자동 추가되면 다시 배포합니다. `/api/health`의 `checks.blob`이 `true`면 완료.
-3. 사진은 최대 10장(브라우저에서 1280px JPEG로 줄여 업로드), 동영상은 1개·60초·50MB 이하(MP4/MOV/WebM)입니다. 파일은 브라우저에서 Blob으로 직접 올라가고, 서버(`/api/upload`)는 로그인 사용자에게만 형식·용량이 제한된 업로드 토큰을 발급합니다.
+3. 사진은 최대 10장(브라우저에서 1280px JPEG로 줄여 업로드), 동영상은 최대 2개·개당 60초·50MB 이하(MP4/MOV/WebM)입니다. 파일은 브라우저에서 Blob으로 직접 올라가고, 서버(`/api/upload`)는 로그인 사용자에게만 형식·용량이 제한된 업로드 토큰을 발급합니다.
 4. Hobby 플랜 Blob 무료 한도(저장 용량·전송량)를 넘으면 과금되거나 업로드가 막힐 수 있으니 Vercel → Usage에서 확인하세요.
 
 ## 3. Pi Developer Portal

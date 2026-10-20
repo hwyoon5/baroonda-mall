@@ -24,25 +24,26 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const sellerReviews = await listReviewsForSeller(listing.seller.uid);
   const sellerRating = sellerReviews.length ? (sellerReviews.reduce((a, r) => a + r.rating, 0) / sellerReviews.length).toFixed(1) : null;
   const category = findCategory(listing.category);
+  const videos = listing.videos ?? [];
   const rate = discountRate(listing.pricePi, listing.originalPricePi);
 
   return (
     <>
       <SubHeader title={listing.title} />
-      {listing.images.length > 1 || listing.video ? (
+      {listing.images.length > 1 || videos.length ? (
         <div className="relative">
           <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">
             {listing.images.map((src, i) => (
               <Fragment key={i}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt={`${listing.title} 사진 ${i + 1}`} className="aspect-square w-full shrink-0 snap-start object-cover" />
-                {i === 0 && listing.video && <ListingVideo src={listing.video} poster={src} />}
+                {i === 0 && videos.map((v) => <ListingVideo key={v} src={v} poster={src} />)}
               </Fragment>
             ))}
-            {!listing.images.length && listing.video && <ListingVideo src={listing.video} />}
+            {!listing.images.length && videos.map((v) => <ListingVideo key={v} src={v} />)}
           </div>
           <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white">
-            {listing.video ? "▶ 동영상 · " : ""}사진 {listing.images.length}
+            {videos.length ? `▶ 동영상 ${videos.length} · ` : ""}사진 {listing.images.length}
           </span>
         </div>
       ) : (

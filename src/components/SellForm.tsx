@@ -5,7 +5,7 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import { api } from "@/lib/client/api";
 import { uploadMedia, videoDuration } from "@/lib/client/media";
 import { listingCategories } from "@/lib/categories";
-import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, VIDEO_TYPES } from "@/lib/media";
+import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
 import { usageGradeLabel, type Condition, type Listing, type TradeMethod, type UsageGrade } from "@/lib/types";
 import { useStore } from "./store/StoreProvider";
 
@@ -72,7 +72,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const router = useRouter();
   const { showToast } = useStore();
   const [photos, setPhotos] = useState<string[]>([]);
-  const [video, setVideo] = useState("");
+  const [videos, setVideos] = useState<string[]>([]);
   const [blobEnabled, setBlobEnabled] = useState(false);
   const [photoUploads, setPhotoUploads] = useState(0);
   const [videoProgress, setVideoProgress] = useState<number | null>(null);
@@ -109,7 +109,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         setLocation(l.location ?? "");
         setDescription(l.description);
         setPhotos(l.images);
-        setVideo(l.video ?? "");
+        setVideos(l.videos ?? []);
         if (l.usageGrade) setUsageGrade(l.usageGrade);
         setUsageNote(l.usageNote ?? "");
         if (l.stock) setStock(String(l.stock));
@@ -174,7 +174,8 @@ export default function SellForm({ draftId }: { draftId?: string }) {
     if (sec !== null && sec > MAX_VIDEO_SECONDS + 0.5) return showToast(`동영상은 ${MAX_VIDEO_SECONDS}초 이하만 올릴 수 있어요.`);
     setVideoProgress(0);
     try {
-      setVideo(await uploadMedia(file, "video", videoExt(file.type), setVideoProgress));
+      const url = await uploadMedia(file, "video", videoExt(file.type), setVideoProgress);
+      setVideos((cur) => [...cur, url].slice(0, MAX_VIDEOS));
     } catch {
       showToast("동영상을 올리지 못했어요. 다시 시도해 주세요.");
     } finally {
@@ -207,7 +208,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         location,
         description,
         images: photos,
-        video: video || null,
+        videos,
       };
       const { listing } = draftId
         ? await api<{ listing: Listing }>(`/api/listings/${draftId}`, body, "PUT")
@@ -279,7 +280,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
               />
             </label>
           )}
-          {!video && videoProgress === null && (
+          {videos.length < MAX_VIDEOS && videoProgress === null && (
             <label
               className={`relative flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed text-gray-400 ${blobEnabled ? "tap border-gray-300" : "border-gray-200 opacity-50"}`}
             >
@@ -287,7 +288,9 @@ export default function SellForm({ draftId }: { draftId?: string }) {
                 <rect x="3" y="6" width="13" height="12" rx="2" />
                 <path d="m16 10 5-3v10l-5-3z" />
               </svg>
-              <span className="text-[11px] font-medium">동영상 0/1</span>
+              <span className="text-[11px] font-medium">
+                동영상 {videos.length}/{MAX_VIDEOS}
+              </span>
               <input
                 type="file"
                 accept="video/*"
@@ -307,22 +310,22 @@ export default function SellForm({ draftId }: { draftId?: string }) {
               <span className="text-pi">{videoProgress}%</span>
             </div>
           )}
-          {video && (
-            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-black">
-              <video src={`${video}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+          {videos.map((src, i) => (
+            <div key={src} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-black">
+              <video src={`${src}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
               <span className="absolute inset-0 flex items-center justify-center text-xl text-white/90" aria-hidden>
                 ▶
               </span>
               <button
                 type="button"
-                onClick={() => setVideo("")}
-                aria-label="동영상 삭제"
+                onClick={() => setVideos((cur) => cur.filter((_, j) => j !== i))}
+                aria-label={`동영상 ${i + 1} 삭제`}
                 className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs text-white"
               >
                 ×
               </button>
             </div>
-          )}
+          ))}
           {photos.map((src, i) => (
             <div key={i} className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-gray-100">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -346,7 +349,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         </div>
         <p className="mt-1 text-[11px] text-gray-400">
           {blobEnabled
-            ? `사진 최대 ${MAX_PHOTOS}장, 동영상 1개(${MAX_VIDEO_SECONDS}초·${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하)를 올릴 수 있어요.`
+            ? `사진 최대 ${MAX_PHOTOS}장, 동영상 최대 ${MAX_VIDEOS}개(개당 ${MAX_VIDEO_SECONDS}초·${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하)를 올릴 수 있어요.`
             : `사진 최대 ${MAX_PHOTOS}장을 올릴 수 있어요. 동영상은 저장소 연결 후 사용할 수 있어요.`}
         </p>
       </div>
