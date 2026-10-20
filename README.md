@@ -20,6 +20,7 @@ Next.js 15 (App Router) + Tailwind CSS v4.
 | `POST /api/user/signin` | `Pi.authenticate()` 결과(authResult)의 accessToken을 Pi `/v2/me`로 검증하고 세션 토큰 발급 (Pi 공식 데모 표준, `docs/PI_STANDARD.md`) |
 | `GET /api/me` | 현재 로그인 사용자 |
 | `GET/POST /api/listings`, `GET/PUT/PATCH /api/listings/[id]` | 판매글 조회 / 등록·임시저장(`draft: true`) / 임시저장 이어서 작성·게시 / 판매자 상태·재고(옵션별 `variants`) 수정 |
+| `GET/POST /api/chats`, `GET/POST /api/chats/[id]` | 1:1 채팅 목록·방 열기(상품+구매자당 1개) / 메시지 조회(`?after=`, 읽음 처리)·전송 |
 | `GET/POST /api/orders`, `GET/POST /api/orders/[id]` | 주문 목록 / 주문 생성(결제 데이터 반환) / 발송·구매확정 |
 | `POST /api/payments/approve` | `onReadyForServerApproval` → 결제 내용 검증 후 Pi `/approve` |
 | `POST /api/payments/complete` | `onReadyForServerCompletion` → Pi `/complete`(txid) |

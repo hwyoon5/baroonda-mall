@@ -99,3 +99,20 @@ export function listingStatusText(l: Pick<Listing, "status" | "condition">) {
   if (l.status === "draft") return "임시저장";
   return l.condition === "new" ? "품절" : "거래완료";
 }
+
+/** 구매자-판매자 1:1 채팅방 (상품 + 구매자 기준으로 하나) */
+export type ChatRoom = {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  listingImage?: string;
+  buyer: PiUser;
+  seller: PiUser;
+  lastMessage?: string;
+  lastAt: string;
+  /** uid → 읽지 않은 메시지 수 */
+  unread: Record<string, number>;
+  createdAt: string;
+};
+
+export type ChatMessage = { id: string; roomId: string; senderUid: string; text: string; createdAt: string };

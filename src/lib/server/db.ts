@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
-import type { Listing, Order } from "../types";
+import type { ChatMessage, ChatRoom, Listing, Order } from "../types";
 import { HttpError } from "./http";
 
 /**
@@ -66,7 +66,7 @@ const redisToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_RE
 export const storageMode: "redis" | "memory" = redisUrl && redisToken ? "redis" : "memory";
 const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : memoryKv();
 
-const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order" };
+const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
 export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -147,4 +147,37 @@ export async function listOrdersFor(uid: string) {
     purchases: all.filter((o) => o.buyer.uid === uid).sort(byDate),
     sales: all.filter((o) => o.seller.uid === uid).sort(byDate),
   };
+}
+
+// ---------- 1:1 채팅 ----------
+const chatMsgs = (roomId: string) => `bo:chat-msgs:${roomId}`;
+
+export async function getChatRoom(id: string): Promise<ChatRoom | undefined> {
+  const raw = await kv.hget(K.chats, id);
+  return raw ? (JSON.parse(raw) as ChatRoom) : undefined;
+}
+
+export async function findChatRoom(listingId: string, buyerUid: string) {
+  const id = await kv.hget(K.chatIndex, `${listingId}|${buyerUid}`);
+  return id ? getChatRoom(id) : undefined;
+}
+
+export async function saveChatRoom(room: ChatRoom) {
+  await kv.hset(K.chats, room.id, JSON.stringify(room));
+  await kv.hset(K.chatIndex, `${room.listingId}|${room.buyer.uid}`, room.id);
+}
+
+export async function listChatRooms(uid: string) {
+  return (await kv.hvals(K.chats))
+    .map((v) => JSON.parse(v) as ChatRoom)
+    .filter((r) => r.buyer.uid === uid || r.seller.uid === uid)
+    .sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+}
+
+export async function addChatMessage(msg: ChatMessage) {
+  await kv.hset(chatMsgs(msg.roomId), msg.id, JSON.stringify(msg));
+}
+
+export async function listChatMessages(roomId: string) {
+  return (await kv.hvals(chatMsgs(roomId))).map((v) => JSON.parse(v) as ChatMessage).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }

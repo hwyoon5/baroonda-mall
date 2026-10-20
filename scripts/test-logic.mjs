@@ -9,7 +9,9 @@ let BASE = process.env.BASE_URL;
 let server;
 if (!BASE) {
   BASE = `http://localhost:${PORT}`;
-  server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, PI_MOCK: "1", NEXT_PUBLIC_PI_MOCK: "1" }, stdio: "ignore" });
+  const busy = await fetch(BASE).then(() => true, () => false);
+  if (busy) throw new Error(`포트 ${PORT}이 이미 사용 중이에요(이전 서버가 남아 있을 수 있어요). 종료 후 다시 실행해 주세요.`);
+  server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, PI_MOCK: "1", NEXT_PUBLIC_PI_MOCK: "1" }, stdio: "ignore", detached: true });
   for (let i = 0; ; i++) {
     try {
       if ((await fetch(BASE)).ok) break;
@@ -154,6 +156,33 @@ test("예시 상품·본인 상품은 구매 불가", async () => {
   assert.equal((await call("/api/orders", { listingId: l.id }, seller)).status, 400);
 });
 
+test("1:1 채팅: 방 생성(중복 없음)·메시지·안 읽음·권한", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "채팅 상품", stock: 1 }, seller);
+  assert.equal((await call("/api/chats", { listingId: l.id }, seller)).status, 400, "self chat");
+  assert.equal((await call("/api/chats", { listingId: "demo1" }, b1)).status, 400, "demo chat");
+  const { room } = await ok("/api/chats", { listingId: l.id }, b1);
+  assert.equal((await ok("/api/chats", { listingId: l.id }, b1)).room.id, room.id);
+  assert.equal((await call("/api/chats", { listingId: l.id }, b2)).data.room.id === room.id, false);
+  assert.equal((await call(`/api/chats/${room.id}`, { text: "  " }, b1)).status, 400, "blank");
+  assert.equal((await call(`/api/chats/${room.id}`, { text: "x".repeat(1001) }, b1)).status, 400, "too long");
+  const { message: m1 } = await ok(`/api/chats/${room.id}`, { text: "안녕하세요, 구매 가능할까요?" }, b1);
+  await ok(`/api/chats/${room.id}`, { text: "사이즈 문의드려요" }, b1);
+  let mine = await ok("/api/chats", undefined, seller);
+  assert.equal(mine.rooms.find((r) => r.id === room.id).unread[mine.rooms[0].seller.uid], 2);
+  assert.ok(mine.unread >= 2);
+  assert.equal((await call(`/api/chats/${room.id}`, undefined, b2)).status, 404);
+  const read = await ok(`/api/chats/${room.id}`, undefined, seller);
+  assert.equal(read.messages.length, 2);
+  assert.equal(read.messages[0].text, "안녕하세요, 구매 가능할까요?");
+  mine = await ok("/api/chats", undefined, seller);
+  assert.equal(mine.rooms.find((r) => r.id === room.id).unread[mine.rooms[0].seller.uid], 0);
+  await ok(`/api/chats/${room.id}`, { text: "네 가능해요" }, seller);
+  const after = await ok(`/api/chats/${room.id}?after=${encodeURIComponent(m1.createdAt)}`, undefined, b1);
+  assert.deepEqual(after.messages.map((m) => m.text), ["사이즈 문의드려요", "네 가능해요"]);
+  const bl = await ok("/api/chats", undefined, b1);
+  assert.equal(bl.rooms.find((r) => r.id === room.id).lastMessage, "네 가능해요");
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {
@@ -161,9 +190,10 @@ for (const [name, fn] of tests) {
     console.log(`✓ ${name}`);
   } catch (e) {
     failed++;
-    console.log(`✗ ${name}\n  ${e.message}`);
+    console.log(`✗ ${name}\n  ${e.message}\n  ${(e.stack ?? "").split("\n").find((l) => l.includes("test-logic.mjs:")) ?? ""}`);
   }
 }
 console.log(`\n${tests.length - failed}/${tests.length} passed`);
-server?.kill();
+// npx 아래의 next-server까지 함께 종료(프로세스 그룹)
+if (server) process.kill(-server.pid, "SIGTERM");
 process.exit(failed ? 1 : 0);

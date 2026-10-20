@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { api } from "@/lib/client/api";
 import { listingStatusText, type Listing } from "@/lib/types";
 import PiPrice from "./PiPrice";
 import { useAuth } from "@/hooks/useAuth";
@@ -45,6 +46,17 @@ export default function BuyBar({ listing }: { listing: Listing }) {
     }
   };
 
+  const openChat = async () => {
+    if (listing.demo) return showToast("예시 상품의 판매자와는 채팅할 수 없어요.");
+    if (!user) return requireAuth();
+    try {
+      const { room } = await api<{ room: { id: string } }>("/api/chats", { listingId: listing.id });
+      router.push(`/chats/${room.id}`);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "채팅을 열지 못했어요.");
+    }
+  };
+
   const onBuy = () => {
     if (listing.demo) return showToast("예시 상품이라 구매할 수 없어요. 직접 등록된 상품을 구매해 보세요.");
     if (!user) return requireAuth();
@@ -83,6 +95,11 @@ export default function BuyBar({ listing }: { listing: Listing }) {
             {listing.condition === "new" ? (listing.stock ? `재고 ${listing.stock}개` : "품절") : listing.negotiable ? "가격제안 가능" : "가격제안 불가"}
           </p>
         </div>
+        {!mine && (
+          <button type="button" onClick={() => void openChat()} className="tap shrink-0 rounded-xl border border-gray-200 px-3 py-3 text-sm font-bold text-gray-700">
+            채팅
+          </button>
+        )}
         {action}
       </div>
 

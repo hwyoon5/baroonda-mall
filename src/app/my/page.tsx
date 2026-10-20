@@ -37,12 +37,16 @@ const summary: [ListingStatus, string][] = [
 export default function MyPage() {
   const { user, ready, signOut } = useAuth();
   const [mine, setMine] = useState<Listing[] | null>(null);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     if (!user) return;
     api<{ listings: Listing[] }>("/api/listings?seller=me")
       .then((r) => setMine(r.listings))
       .catch(() => setMine([]));
+    api<{ unread: number }>("/api/chats")
+      .then((r) => setUnread(r.unread))
+      .catch(() => undefined);
   }, [user]);
 
   return (
@@ -88,6 +92,7 @@ export default function MyPage() {
           <section className="mt-2 bg-white">
             <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">구매</h2>
             <ul className="divide-y divide-gray-100">
+              <MenuRow href="/chats" icon="💬" label="채팅" desc={unread ? `읽지 않은 메시지 ${unread}개` : "구매자·판매자와 1:1 대화"} />
               <MenuRow href="/orders" icon="🧾" label="구매 내역" />
               <MenuRow href="/wishlist" icon="❤️" label="찜 목록" />
             </ul>
