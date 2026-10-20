@@ -1,12 +1,10 @@
 import { isListingCategory } from "@/lib/categories";
 import { isUsageGrade, type Listing, type ListingOption, type TradeMethod, type Variant } from "@/lib/types";
+import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS } from "@/lib/options";
 import { HttpError } from "./http";
 
 const MAX_IMAGES = 3;
 const MAX_IMAGE_CHARS = 400_000;
-const MAX_OPTIONS = 3;
-const MAX_OPTION_VALUES = 10;
-export const MAX_VARIANTS = 50;
 
 export type ListingInput = Partial<{
   title: string;
