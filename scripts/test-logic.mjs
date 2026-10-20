@@ -379,8 +379,16 @@ test("쇼츠: 등록·내 상품 연결·숨김·삭제·권한, 피드/관리 �
   assert.equal((await call("/api/shorts", { videoUrl: vid, caption: "x".repeat(101) }, b1)).status, 400, "설명 100자");
   const { listing: l } = await ok("/api/listings", { ...newBase, title: "쇼츠 상품", pricePi: 3, stock: 2 }, seller);
   assert.equal((await call("/api/shorts", { videoUrl: vid, listingId: l.id }, b1)).status, 400, "남의 상품 연결 불가");
-  const { short } = await ok("/api/shorts", { videoUrl: vid, caption: " 오늘 입고! ", listingId: l.id }, seller);
+  assert.equal((await call("/api/shorts", { videoUrl: vid, posterUrl: "https://evil.example.com/listings/photo/p.jpg" }, seller)).status, 400, "외부 포스터");
+  assert.equal((await call("/api/shorts", { videoUrl: vid, posterUrl: vid }, seller)).status, 400, "포스터는 사진 경로만");
+  const poster = "https://abc123.public.blob.vercel-storage.com/listings/photo/p-x1Y2.jpg";
+  const { short } = await ok("/api/shorts", { videoUrl: vid, posterUrl: poster, caption: " 오늘 입고! ", listingId: l.id }, seller);
   assert.equal(short.caption, "오늘 입고!");
+  assert.equal(short.posterUrl, poster);
+  const more = [];
+  for (let i = 0; i < 3; i++) more.push((await ok("/api/shorts", { videoUrl: vid, posterUrl: "" }, seller)).short);
+  assert.equal(more[2].posterUrl, undefined, "포스터 없이도 계속 등록(4번째 이후 포함)");
+  for (const m of more) await ok(`/api/shorts/${m.id}`, undefined, seller, "DELETE");
   assert.equal(short.status, "public");
   const inFeed = async () => (await ok("/api/shorts")).shorts.find((s) => s.id === short.id);
   const f = await inFeed();

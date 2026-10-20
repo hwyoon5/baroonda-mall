@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useStore } from "@/components/store/StoreProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/client/api";
-import { uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
+import { inspectVideo, uploadMedia, videoExt } from "@/lib/client/media";
 import { MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, VIDEO_TYPES } from "@/lib/media";
 import { MAX_SHORT_CAPTION, MAX_SHORTS_PER_USER } from "@/lib/shorts";
 import type { Listing, ShortView } from "@/lib/types";
@@ -21,7 +21,10 @@ export default function MyShortsPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [blobEnabled, setBlobEnabled] = useState<boolean | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  const [phase, setPhase] = useState<"idle" | "checking" | "uploading">("idle");
+  const abortRef = useRef<AbortController | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
+  const [posterUrl, setPosterUrl] = useState("");
   const [caption, setCaption] = useState("");
   const [listingId, setListingId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -40,29 +43,57 @@ export default function MyShortsPage() {
       .catch(() => setBlobEnabled(false));
   }, [user]);
 
+  useEffect(() => () => abortRef.current?.abort(), []);
+
   const pick = async (file: File | undefined) => {
     if (!file) return;
     if (file.type && !VIDEO_TYPES.includes(file.type)) return showToast("MP4·MOV·WebM 동영상만 올릴 수 있어요.");
     if (file.size > MAX_VIDEO_BYTES) return showToast(`동영상은 ${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하만 올릴 수 있어요.`);
-    const sec = await videoDuration(file);
-    if (sec !== null && sec > MAX_VIDEO_SECONDS + 0.5) return showToast(`쇼츠는 ${MAX_VIDEO_SECONDS}초 이하만 올릴 수 있어요.`);
-    setProgress(0);
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setPhase("checking");
     try {
-      setVideoUrl(await uploadMedia(file, "video", videoExt(file.type), setProgress));
+      const { duration, poster } = await inspectVideo(file, true);
+      if (ac.signal.aborted) return;
+      if (duration !== null && duration > MAX_VIDEO_SECONDS + 0.5) return showToast(`쇼츠는 ${MAX_VIDEO_SECONDS}초 이하만 올릴 수 있어요.`);
+      setPhase("uploading");
+      setProgress(0);
+      const url = await uploadMedia(file, "video", videoExt(file.type), setProgress, ac.signal);
+      const poster_ = poster ? await uploadMedia(poster, "photo", "jpg", undefined, ac.signal).catch(() => "") : "";
+      if (ac.signal.aborted) return;
+      setVideoUrl(url);
+      setPosterUrl(poster_);
     } catch {
-      showToast("동영상을 올리지 못했어요. 다시 시도해 주세요.");
+      if (!ac.signal.aborted) showToast("동영상을 올리지 못했어요. 다시 시도해 주세요.");
     } finally {
-      setProgress(null);
+      if (abortRef.current === ac) {
+        abortRef.current = null;
+        setPhase("idle");
+        setProgress(null);
+      }
     }
+  };
+
+  const cancelUpload = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setPhase("idle");
+    setProgress(null);
+  };
+
+  const resetDraft = () => {
+    setVideoUrl("");
+    setPosterUrl("");
   };
 
   const submit = async () => {
     if (!videoUrl || busy) return;
     setBusy(true);
     try {
-      const { short } = await api<{ short: ShortView }>("/api/shorts", { videoUrl, caption, listingId: listingId || undefined });
+      const { short } = await api<{ short: ShortView }>("/api/shorts", { videoUrl, posterUrl: posterUrl || undefined, caption, listingId: listingId || undefined });
       setShorts((cur) => [short, ...(cur ?? [])]);
-      setVideoUrl("");
+      resetDraft();
       setCaption("");
       setListingId("");
       showToast("쇼츠를 등록했어요!");
@@ -102,7 +133,17 @@ export default function MyShortsPage() {
 
   const count = shorts?.length ?? 0;
   const full = count >= MAX_SHORTS_PER_USER;
-  const canPick = blobEnabled === true && !full && progress === null;
+  const blockReason =
+    blobEnabled === null
+      ? "업로드를 준비하고 있어요. 잠시 후 다시 눌러 주세요."
+      : blobEnabled === false
+        ? "동영상 저장소가 연결되지 않아 지금은 올릴 수 없어요."
+        : full
+          ? `쇼츠는 최대 ${MAX_SHORTS_PER_USER}개까지 등록할 수 있어요. 안 쓰는 쇼츠를 삭제해 주세요.`
+          : phase !== "idle"
+            ? "동영상을 올리는 중이에요."
+            : null;
+  const onBlocked = () => blockReason && showToast(blockReason);
 
   return (
     <div>
@@ -128,17 +169,22 @@ export default function MyShortsPage() {
                 쇼츠는 최대 {MAX_SHORTS_PER_USER}개까지 등록할 수 있어요. 안 쓰는 쇼츠를 삭제해 주세요.
               </p>
             )}
-            {progress !== null ? (
+            {phase !== "idle" ? (
               <div className="mt-3">
                 <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                  <div className="h-full bg-pi transition-all" style={{ width: `${progress}%` }} />
+                  <div className="h-full bg-pi transition-all" style={{ width: `${progress ?? 0}%` }} />
                 </div>
-                <p className="mt-1 text-xs text-gray-500">동영상 올리는 중… {progress}%</p>
+                <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+                  <span>{phase === "checking" ? "동영상 확인 중…" : `동영상 올리는 중… ${progress ?? 0}%`}</span>
+                  <button type="button" onClick={cancelUpload} className="tap rounded-md border border-gray-200 px-2 py-1 font-bold text-gray-600">
+                    취소
+                  </button>
+                </div>
               </div>
             ) : !videoUrl ? (
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <PickButton icon="📹" label="촬영하기" capture disabled={!canPick} onPick={pick} />
-                <PickButton icon="🖼️" label="앨범에서 선택" disabled={!canPick} onPick={pick} />
+                <PickButton icon="📹" label="촬영하기" capture blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
+                <PickButton icon="🖼️" label="앨범에서 선택" blocked={!!blockReason} onBlocked={onBlocked} onPick={pick} />
               </div>
             ) : (
               <div className="mt-3 space-y-3">
@@ -174,7 +220,7 @@ export default function MyShortsPage() {
                   <span className="mt-1 block text-[11px] text-gray-400">연결하면 쇼츠 피드에서 바로 상품으로 이동할 수 있어요.</span>
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  <button type="button" onClick={() => setVideoUrl("")} className="tap rounded-xl border border-gray-200 py-3 text-sm font-bold">
+                  <button type="button" onClick={resetDraft} className="tap rounded-xl border border-gray-200 py-3 text-sm font-bold">
                     다시 선택
                   </button>
                   <button
@@ -208,7 +254,14 @@ export default function MyShortsPage() {
                 {shorts.map((s) => (
                   <li key={s.id} className="min-w-0">
                     <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-black">
-                      <video src={`${s.videoUrl}#t=0.1`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                      {s.posterUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={s.posterUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      ) : (
+                        <span aria-hidden className="flex h-full items-center justify-center text-3xl">
+                          🎬
+                        </span>
+                      )}
                       {s.status === "public" ? (
                         <Link href={`/shorts?id=${s.id}`} aria-label="피드에서 보기" className="absolute inset-0" />
                       ) : (
@@ -246,24 +299,53 @@ export default function MyShortsPage() {
   );
 }
 
-function PickButton({ icon, label, capture, disabled, onPick }: { icon: string; label: string; capture?: boolean; disabled: boolean; onPick: (f: File | undefined) => void }) {
+/** 숨긴 file input을 버튼에서 직접 연다. 열기 전에 값을 비워 같은 파일을 다시 골라도 onChange가 오고, 막힌 상태면 이유를 알려 준다. */
+function PickButton({
+  icon,
+  label,
+  capture,
+  blocked,
+  onBlocked,
+  onPick,
+}: {
+  icon: string;
+  label: string;
+  capture?: boolean;
+  blocked: boolean;
+  onBlocked: () => void;
+  onPick: (f: File | undefined) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
   return (
-    <label
-      className={`tap flex flex-col items-center gap-1 rounded-xl border-2 border-dashed border-gray-200 py-5 text-sm font-bold ${disabled ? "opacity-40" : "cursor-pointer"}`}
-    >
-      <span className="text-2xl">{icon}</span>
-      {label}
+    <div className="relative">
+      <button
+        type="button"
+        aria-disabled={blocked}
+        onClick={() => {
+          const el = ref.current;
+          if (blocked || !el) return onBlocked();
+          el.value = "";
+          el.click();
+        }}
+        className={`tap flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-gray-200 py-5 text-sm font-bold ${blocked ? "opacity-40" : ""}`}
+      >
+        <span className="text-2xl">{icon}</span>
+        {label}
+      </button>
       <input
+        ref={ref}
         type="file"
         accept="video/*"
         capture={capture ? "environment" : undefined}
-        disabled={disabled}
-        className="hidden"
+        tabIndex={-1}
+        aria-hidden
+        className="sr-only"
         onChange={(e) => {
-          onPick(e.target.files?.[0]);
+          const f = e.target.files?.[0];
           e.target.value = "";
+          onPick(f);
         }}
       />
-    </label>
+    </div>
   );
 }
