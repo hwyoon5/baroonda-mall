@@ -417,6 +417,42 @@ test("쇼츠: 등록·내 상품 연결·숨김·삭제·권한, 피드/관리 �
   assert.ok((await (await fetch(BASE + "/")).text()).includes('href="/shorts"'), "하단 쇼츠 탭");
 });
 
+test("검색 필터·정렬: 가격대·판매 유형·브랜드·빠른배송·구매 가능, 가격/인기/할인율/브랜드순", async () => {
+  const tag = `zq${run}`;
+  const mk = async (name, extra) => (await ok("/api/listings", { ...newBase, title: `${tag} ${name}`, stock: 3, ...extra }, seller)).listing;
+  const a = await mk("A", { pricePi: 5, brand: " Nike ", fastShipping: true });
+  await mk("B", { pricePi: 1, brand: "nike", originalPricePi: 4 });
+  const c = await mk("C", { pricePi: 12, brand: "Adidas", originalPricePi: 15 });
+  const d = await mk("D", { pricePi: 3, condition: "used", usageGrade: "A", category: "digital" });
+  assert.equal(a.brand, "Nike");
+  const names = async (qs) => (await ok(`/api/listings?q=${tag}&${qs}`)).listings.map((l) => l.title.split(" ")[1]).join("");
+  assert.equal(await names("sort=priceAsc"), "BDAC");
+  assert.equal(await names("sort=priceDesc"), "CADB");
+  assert.equal((await names("sort=discount")).slice(0, 2), "BC", "할인율 75% → 20%");
+  assert.equal(await names("sort=brand"), "CABD", "브랜드 가나다, 브랜드 없는 상품은 뒤로");
+  assert.equal(await names("min=2&max=6&sort=priceAsc"), "DA");
+  assert.equal(await names("min=6&max=2&sort=priceAsc"), "DA", "최소·최대가 뒤바뀌어도 처리");
+  assert.equal(await names("kind=used"), "D");
+  assert.equal(await names("brand=NIKE&sort=priceAsc"), "BA", "브랜드는 대소문자 무시");
+  assert.equal(await names("brand=Nike,Adidas&sort=priceAsc"), "BAC");
+  assert.equal(await names("fast=1"), "A");
+  assert.equal(await names("trade=direct"), "");
+  assert.equal(await names("sort=bogus&min=abc"), await names(""), "잘못된 값은 무시");
+  assert.ok((await ok("/api/listings?q=adidas")).listings.some((l) => l.id === c.id), "브랜드명으로 검색");
+
+  const pop = (await ok("/api/listings?sort=popular&kind=new")).listings.map((l) => l.soldCount ?? 0);
+  assert.ok(pop.length > 3 && pop.every((v, i) => i === 0 || pop[i - 1] >= v), "인기순 = 판매량 내림차순");
+
+  await buy(b1, d.id);
+  assert.equal(await names("avail=1&sort=priceAsc"), "BAC", "예약된 상품은 구매 가능만에서 제외");
+  assert.ok((await ok("/api/listings?avail=1")).listings.every((l) => l.status === "selling"));
+
+  const h = await (await fetch(`${BASE}/search?q=${tag}&sort=priceAsc&brand=Nike`)).text();
+  assert.ok(h.includes("검색 결과 2개") && h.includes("낮은 가격순") && h.indexOf(`${tag} B`) < h.indexOf(`${tag} A`) && !h.includes(`${tag} C`));
+  const hb = await (await fetch(`${BASE}/search?brand=Apple`)).text();
+  assert.ok(hb.includes("필터 결과 1개") && hb.includes("아이패드"), "검색어 없이 브랜드만으로 결과");
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

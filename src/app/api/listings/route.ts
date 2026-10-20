@@ -2,6 +2,7 @@ import { listListings, newId, saveListing } from "@/lib/server/db";
 import { handle, json, readJson, requireUser } from "@/lib/server/http";
 import { assertCanPublish } from "@/lib/server/business-input";
 import { parseListingInput, type ListingInput } from "@/lib/server/listing-input";
+import { applySearch, parseSearch } from "@/lib/search";
 import type { Listing } from "@/lib/types";
 
 export const GET = handle(async (req) => {
@@ -16,7 +17,7 @@ export const GET = handle(async (req) => {
     includeSold: p.get("includeSold") === "1" || seller === "me",
     includeDrafts: seller === "me",
   });
-  return json({ listings });
+  return json({ listings: applySearch(listings, parseSearch(p)) });
 });
 
 /** 상품 등록. draft: true 면 임시저장(공개 목록에 노출되지 않음) */

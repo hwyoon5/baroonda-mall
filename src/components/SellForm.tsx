@@ -68,6 +68,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const [photoUploads, setPhotoUploads] = useState(0);
   const [videoProgress, setVideoProgress] = useState<number | null>(null);
   const [title, setTitle] = useState("");
+  const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("");
   const [kind, setKind] = useState<Condition>("used");
   const [usageGrade, setUsageGrade] = useState<UsageGrade>("A");
@@ -96,6 +97,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
       .then(({ listing: l }) => {
         setKind(l.condition);
         setTitle(l.title);
+        setBrand(l.brand ?? "");
         setCategory(l.category);
         setPrice(l.pricePi ? String(l.pricePi) : "");
         setOriginalPrice(l.originalPricePi ? String(l.originalPricePi) : "");
@@ -210,6 +212,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
       const body = {
         draft,
         title,
+        brand,
         category,
         condition: kind,
         pricePi: priceNum,
@@ -373,6 +376,14 @@ export default function SellForm({ draftId }: { draftId?: string }) {
           제목 <span className="text-red-500">*</span>
         </label>
         <input id={`${id}-title`} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={40} placeholder="예) 아이폰 15 128GB 블루" className={input} />
+      </div>
+
+      <div>
+        <label htmlFor={`${id}-brand`} className={label}>
+          브랜드 <span className="text-xs font-normal text-gray-400">(선택)</span>
+        </label>
+        <input id={`${id}-brand`} value={brand} onChange={(e) => setBrand(e.target.value)} maxLength={30} placeholder="예) 애플, 나이키 · 없으면 비워 두세요" className={input} />
+        <p className="mt-1 text-[11px] text-gray-400">입력하면 구매자가 검색 결과에서 브랜드로 걸러 보거나 정렬할 수 있어요.</p>
       </div>
 
       <fieldset>

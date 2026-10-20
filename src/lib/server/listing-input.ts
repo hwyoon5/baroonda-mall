@@ -10,6 +10,7 @@ const MAX_INLINE_TOTAL_CHARS = 3_000_000;
 
 export type ListingInput = Partial<{
   title: string;
+  brand: string;
   description: string;
   category: string;
   condition: string;
@@ -108,6 +109,7 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
   const price = pricePi ?? 0;
   return {
     title,
+    brand: str(b.brand, 30) || undefined,
     description: str(b.description, 2000),
     category: isListingCategory(category) ? category : "",
     condition: isNew ? "new" : "used",

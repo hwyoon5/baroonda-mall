@@ -21,6 +21,8 @@ export type PiUser = { uid: string; username: string };
 export type Listing = {
   id: string;
   title: string;
+  /** 선택 입력. 검색 필터·브랜드순 정렬에 쓴다. */
+  brand?: string;
   description: string;
   category: string;
   condition: Condition;

@@ -69,6 +69,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           {" · "}
           {listingKindLabel[listing.condition]}
         </div>
+        {listing.brand && (
+          <Link href={`/search?brand=${encodeURIComponent(listing.brand)}`} className="tap mt-1 inline-block text-xs font-bold text-pi">
+            {listing.brand} 상품 더보기 ›
+          </Link>
+        )}
         <h1 className="mt-1 text-lg font-bold text-gray-900">{listing.title}</h1>
         {listing.originalPricePi && <p className="mt-2 text-sm text-gray-400 line-through">π {formatPi(listing.originalPricePi)}</p>}
         <p className="flex items-baseline gap-2">
