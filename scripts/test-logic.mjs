@@ -642,6 +642,20 @@ test("카테고리 퀵 메뉴: 유아동→패션 통합, 디지털/가전, 신�
   assert.ok([307, 308].includes(r.status) && new URL(r.headers.get("location"), BASE).pathname === "/category/fashion");
 });
 
+test("하단 메뉴 5칸(거래내역 삭제), 상단 찜 아이콘 → 장바구니", async () => {
+  const home = await (await fetch(`${BASE}/`)).text();
+  const nav = home.slice(home.lastIndexOf("<nav"), home.indexOf("</nav>", home.lastIndexOf("<nav")));
+  assert.equal((nav.match(/<li/g) ?? []).length, 5);
+  assert.ok(nav.includes("grid-cols-5") && !nav.includes("거래내역") && !nav.includes('href="/orders"'));
+  assert.ok(home.includes('href="/cart"') && home.includes('aria-label="장바구니"'), "헤더 장바구니");
+  assert.ok(!home.includes('href="/wishlist"') && !home.includes('aria-label="찜 목록"'), "헤더 찜 아이콘 삭제");
+  const cart = await fetch(`${BASE}/cart`);
+  assert.equal(cart.status, 200);
+  assert.ok((await cart.text()).includes("장바구니"));
+  assert.ok((await (await fetch(`${BASE}/listings/demo2`)).text()).includes('aria-label="장바구니 담기"'));
+  assert.equal((await fetch(`${BASE}/orders`)).status, 200, "구매·판매 내역은 마이에서 계속 접근");
+});
+
 test("상품 카드: 판매자 동네 표기 없음", async () => {
   const tag = `동네${run}`;
   await ok("/api/listings", { ...newBase, title: `${tag} 새`, stock: 1, location: "새상품동" }, seller);

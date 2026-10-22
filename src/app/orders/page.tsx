@@ -38,7 +38,7 @@ function Orders() {
   const list = data?.[tab] ?? [];
   return (
     <>
-      <SubHeader title="거래내역" back={false} />
+      <SubHeader title="구매·판매 내역" />
       {!ready ? null : !user ? (
         <LoginCard message="로그인하면 구매·판매 내역을 볼 수 있어요." />
       ) : (
