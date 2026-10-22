@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import HeartLink from "./HeartLink";
+import CartLink from "./CartLink";
 
 export default function SubHeader({ title, right, back = true }: { title: string; right?: ReactNode; back?: boolean }) {
   const router = useRouter();
@@ -31,7 +31,7 @@ export default function SubHeader({ title, right, back = true }: { title: string
               <path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z" />
             </svg>
           </Link>
-          <HeartLink className="p-2" />
+          <CartLink className="p-2" />
         </div>
       )}
     </header>

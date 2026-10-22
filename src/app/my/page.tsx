@@ -96,7 +96,8 @@ export default function MyPage() {
             <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">구매</h2>
             <ul className="divide-y divide-gray-100">
               <MenuRow href="/chats" icon="💬" label="채팅" desc={unread ? `읽지 않은 메시지 ${unread}개` : "구매자·판매자와 1:1 대화"} />
-              <MenuRow href="/orders" icon="🧾" label="구매 내역" />
+              <MenuRow href="/orders" icon="🧾" label="구매 내역" desc="결제·배송·구매 확정 현황" />
+              <MenuRow href="/cart" icon="🛒" label="장바구니" />
               <MenuRow href="/wishlist" icon="❤️" label="찜 목록" />
             </ul>
           </section>

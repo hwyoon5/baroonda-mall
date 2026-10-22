@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/client/api";
 import { addPi, shippingFeeFor, type ShippingTerms } from "@/lib/business";
 import { formatPi } from "@/lib/format";
@@ -16,10 +16,11 @@ import WishButton from "./WishButton";
 export default function BuyBar({ listing, shipping: terms }: { listing: Listing; shipping?: ShippingTerms }) {
   const { user, requireAuth } = useAuth();
   const { orderProduct } = usePayments();
-  const { showToast } = useStore();
+  const { showToast, addToCart, removeFromCart } = useStore();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState<false | "buy" | "cart">(false);
+  const cartMode = sheet === "cart";
   const [picked, setPicked] = useState<Record<string, string>>({});
   const mine = user?.uid === listing.seller.uid;
   const options = listing.options ?? [];
@@ -43,11 +44,25 @@ export default function BuyBar({ listing, shipping: terms }: { listing: Listing;
   const checkout = options.length > 0 || shippingFeeFor(shipping, listing.pricePi, true) > 0;
   const variantSoldOut = Boolean(variants.length && allPicked && (!selectedVariant || selectedVariant.stock < 1));
 
+  // 장바구니의 [구매하기]: /listings/:id?buy=1&opt={...} 로 들어오면 담아 둔 옵션으로 주문 확인을 연다.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("buy") !== "1") return;
+    try {
+      const opt = JSON.parse(q.get("opt") ?? "{}") as Record<string, string>;
+      setPicked(Object.fromEntries((listing.options ?? []).filter((o) => o.values.includes(opt[o.name])).map((o) => [o.name, opt[o.name]])));
+    } catch {
+      // 잘못된 옵션은 무시하고 직접 고르게 한다
+    }
+    setSheet("buy");
+  }, [listing.options]);
+
   const pay = async () => {
     setBusy(true);
     try {
       const orderId = await orderProduct(listing.id, options.length ? picked : undefined, { remoteArea: hasRemote && remoteArea, pickup: !!shipping && canPickup && pickup });
       if (!orderId) return;
+      removeFromCart(listing.id, options.length ? picked : undefined);
       setSheet(false);
       showToast("π 결제가 완료됐어요!");
       router.push(`/orders/${orderId}`);
@@ -72,9 +87,17 @@ export default function BuyBar({ listing, shipping: terms }: { listing: Listing;
   const onBuy = () => {
     if (!user) return requireAuth();
     if (listing.demo) showToast("테스트로 진행합니다");
-    if (checkout) setSheet(true);
+    if (checkout) setSheet("buy");
     else void pay();
   };
+
+  const putInCart = () => {
+    const added = addToCart(listing.id, options.length ? picked : undefined);
+    setSheet(false);
+    showToast(added ? "장바구니에 담았어요" : "이미 장바구니에 있어요");
+  };
+  const onCart = () => (options.length ? setSheet("cart") : putInCart());
+  const canCart = !mine && listing.status === "selling";
 
   let action;
   if (mine) {
@@ -101,6 +124,20 @@ export default function BuyBar({ listing, shipping: terms }: { listing: Listing;
     <>
       <div className="fixed inset-x-0 bottom-[calc(57px+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md items-center gap-3 border-t border-gray-100 bg-white px-4 py-2.5">
         <WishButton id={listing.id} className="h-11 w-11 shrink-0 border border-gray-200 !bg-white" />
+        {canCart && (
+          <button
+            type="button"
+            onClick={onCart}
+            aria-label="장바구니 담기"
+            className="tap flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-200 text-gray-600"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round">
+              <path d="M2.5 3.5h2.4l2.4 11.5h11.4L21 7.5H6" />
+              <circle cx="9.5" cy="19.5" r="1.5" />
+              <circle cx="17" cy="19.5" r="1.5" />
+            </svg>
+          </button>
+        )}
         <div className="shrink-0">
           <PiPrice value={listing.pricePi} size="lg" />
           <p className="text-[10px] text-gray-400">
@@ -151,7 +188,7 @@ export default function BuyBar({ listing, shipping: terms }: { listing: Listing;
             {selectedVariant && selectedVariant.stock > 0 && (
               <p className="mt-4 text-xs text-gray-500">선택한 옵션 남은 수량 {selectedVariant.stock}개</p>
             )}
-            {shipping && canPickup && (
+            {!cartMode && shipping && canPickup && (
               <fieldset className="mt-4">
                 <legend className="mb-1.5 text-sm font-bold text-gray-800">받는 방법</legend>
                 <div className="flex gap-2">
@@ -169,36 +206,49 @@ export default function BuyBar({ listing, shipping: terms }: { listing: Listing;
                 </div>
               </fieldset>
             )}
-            {hasRemote && shipping && (
+            {!cartMode && hasRemote && shipping && (
               <label className="mt-4 flex items-center gap-2 text-sm text-gray-800">
                 <input type="checkbox" checked={remoteArea} onChange={(e) => setRemoteArea(e.target.checked)} className="h-4 w-4 accent-pi" />
                 제주·도서산간 지역으로 받아요 (+{shipping.remoteFee}π)
               </label>
             )}
-            <dl className="mt-4 space-y-1 rounded-xl bg-gray-50 p-3 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-gray-500">상품 금액</dt>
-                <dd>π {formatPi(listing.pricePi)}</dd>
-              </div>
-              {shipping && (
+            {cartMode ? (
+              <button
+                type="button"
+                onClick={putInCart}
+                disabled={!allPicked || variantSoldOut}
+                className="tap mt-5 w-full rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {!allPicked ? "옵션을 모두 선택해 주세요" : variantSoldOut ? "선택한 옵션은 품절이에요" : "장바구니 담기"}
+              </button>
+            ) : (
+              <>
+              <dl className="mt-4 space-y-1 rounded-xl bg-gray-50 p-3 text-sm">
                 <div className="flex justify-between">
-                  <dt className="text-gray-500">배송비</dt>
-                  <dd>{!shipped ? "직거래 (0π)" : fee ? `π ${formatPi(fee)}` : "무료"}</dd>
+                  <dt className="text-gray-500">상품 금액</dt>
+                  <dd>π {formatPi(listing.pricePi)}</dd>
                 </div>
-              )}
-              <div className="flex justify-between border-t border-gray-200 pt-1.5 font-extrabold">
-                <dt>총 결제 금액</dt>
-                <dd className="text-pi">π {formatPi(total)}</dd>
-              </div>
-            </dl>
-            <button
-              type="button"
-              onClick={() => void pay()}
-              disabled={!allPicked || busy || variantSoldOut}
-              className="tap mt-5 w-full rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
-            >
-              {busy ? "결제 진행 중…" : !allPicked ? "옵션을 모두 선택해 주세요" : variantSoldOut ? "선택한 옵션은 품절이에요" : `π ${formatPi(total)} 결제하기`}
-            </button>
+                {shipping && (
+                  <div className="flex justify-between">
+                    <dt className="text-gray-500">배송비</dt>
+                    <dd>{!shipped ? "직거래 (0π)" : fee ? `π ${formatPi(fee)}` : "무료"}</dd>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-gray-200 pt-1.5 font-extrabold">
+                  <dt>총 결제 금액</dt>
+                  <dd className="text-pi">π {formatPi(total)}</dd>
+                </div>
+              </dl>
+              <button
+                type="button"
+                onClick={() => void pay()}
+                disabled={!allPicked || busy || variantSoldOut}
+                className="tap mt-5 w-full rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
+              >
+                {busy ? "결제 진행 중…" : !allPicked ? "옵션을 모두 선택해 주세요" : variantSoldOut ? "선택한 옵션은 품절이에요" : `π ${formatPi(total)} 결제하기`}
+              </button>
+              </>
+            )}
           </div>
         </div>
       )}

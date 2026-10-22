@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import HeartLink from "./HeartLink";
+import CartLink from "./CartLink";
 
 const keywords = ["아이패드", "이어폰", "패딩", "감귤", "스위치"];
 
@@ -25,7 +25,7 @@ export default function SearchHeader({ initialQuery = "" }: { initialQuery?: str
           바로온다
         </Link>
         <div className="flex items-center text-white">
-          <HeartLink className="p-1.5" />
+          <CartLink className="p-1.5" />
           <Link href="/my" aria-label="마이페이지" className="tap rounded-full p-1.5">
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
               <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" />
