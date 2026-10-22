@@ -60,7 +60,6 @@ export default function BuyBar({ listing, shipping: terms }: { listing: Listing;
   };
 
   const openChat = async () => {
-    if (listing.demo) return showToast("예시 상품의 판매자와는 채팅할 수 없어요.");
     if (!user) return requireAuth();
     try {
       const { room } = await api<{ room: { id: string } }>("/api/chats", { listingId: listing.id });
@@ -71,8 +70,8 @@ export default function BuyBar({ listing, shipping: terms }: { listing: Listing;
   };
 
   const onBuy = () => {
-    if (listing.demo) return showToast("예시 상품이라 구매할 수 없어요. 직접 등록된 상품을 구매해 보세요.");
     if (!user) return requireAuth();
+    if (listing.demo) showToast("테스트로 진행합니다");
     if (checkout) setSheet(true);
     else void pay();
   };

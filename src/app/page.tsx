@@ -24,7 +24,7 @@ export default async function Home() {
         </div>
         <CategoryGrid />
         <TodayDeals deals={deals.slice(0, 10)} />
-        <ListingGrid title="방금 올라온 상품" items={recent.slice(0, 20)} />
+        <ListingGrid title="방금 올라온 상품" items={recent.filter((l) => l.condition !== "used").slice(0, 20)} />
       </main>
     </>
   );

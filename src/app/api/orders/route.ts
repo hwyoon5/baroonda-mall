@@ -1,5 +1,5 @@
 import { addPi, effectiveShipping, shippingFeeFor } from "@/lib/business";
-import { getBusiness, getListing, listOrdersFor, newId, saveOrder } from "@/lib/server/db";
+import { getBusiness, getListing, isUnclaimedDemo, listOrdersFor, newId, saveOrder } from "@/lib/server/db";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
 import { formatOption } from "@/lib/format";
 import type { Order } from "@/lib/types";
@@ -12,7 +12,7 @@ export const POST = handle(async (req) => {
   const { listingId, option, remoteArea, pickup } = await readJson<{ listingId?: string; option?: Record<string, unknown>; remoteArea?: boolean; pickup?: boolean }>(req);
   const listing = listingId ? await getListing(listingId) : undefined;
   if (!listing) throw new HttpError(404, "상품을 찾을 수 없어요.");
-  if (listing.demo) throw new HttpError(400, "예시 상품은 구매할 수 없어요.");
+  if (isUnclaimedDemo(listing)) throw new HttpError(503, "예시 상품 판매자(운영자) 계정이 아직 연결되지 않아 결제할 수 없어요. 잠시 후 다시 시도해 주세요.");
   if (listing.seller.uid === buyer.uid) throw new HttpError(400, "내가 올린 상품은 구매할 수 없어요.");
   if (listing.status !== "selling" || (listing.condition === "new" && (listing.stock ?? 0) < 1)) {
     throw new HttpError(409, "판매 중인 상품이 아니거나 품절됐어요.");

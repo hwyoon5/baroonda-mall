@@ -1,5 +1,5 @@
 import { isBlobUrl } from "@/lib/media";
-import { findChatRoom, getListing, listChatRooms, newId, saveChatRoom, withLock } from "@/lib/server/db";
+import { findChatRoom, getListing, isUnclaimedDemo, listChatRooms, newId, saveChatRoom, withLock } from "@/lib/server/db";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
 import type { ChatRoom } from "@/lib/types";
 
@@ -16,7 +16,7 @@ export const POST = handle(async (req) => {
   const { listingId } = await readJson<{ listingId?: string }>(req);
   const listing = listingId ? await getListing(listingId) : undefined;
   if (!listing || listing.status === "draft") throw new HttpError(404, "상품을 찾을 수 없어요.");
-  if (listing.demo) throw new HttpError(400, "예시 상품의 판매자와는 채팅할 수 없어요.");
+  if (isUnclaimedDemo(listing)) throw new HttpError(503, "예시 상품 판매자(운영자) 계정이 아직 연결되지 않아 채팅할 수 없어요.");
   if (listing.seller.uid === buyer.uid) throw new HttpError(400, "내 상품에는 채팅을 시작할 수 없어요.");
   const room = await withLock(`chat-open:${listing.id}:${buyer.uid}`, async () => {
     const existing = await findChatRoom(listing.id, buyer.uid);
