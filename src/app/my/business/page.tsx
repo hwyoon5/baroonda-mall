@@ -220,7 +220,7 @@ export default function BusinessPage() {
         <form onSubmit={submit} className="space-y-4 bg-white px-4 py-4">
           <p className={`rounded-lg p-3 text-xs leading-relaxed ${saved ? "bg-emerald-50 text-emerald-700" : "bg-violet-50 text-pi"}`}>
             {saved ? "✓ 등록 완료 · 새 상품(정식 판매)을 판매할 수 있어요. " : ""}
-            새 상품(정식 판매)을 판매하려면 사업자 정보가 필요해요. 입력한 정보는 전자상거래법에 따라 상품 상세의 ‘판매자 정보’에 표시돼요. 개인 중고 거래에는 필요 없어요.
+            새 상품(정식 판매)을 판매하려면 사업자 정보가 필요해요. 입력한 정보는 전자상거래법에 따라 상품 상세의 ‘판매자 정보’에 표시돼요.
           </p>
           {row("bizName", "상호명", { maxLength: 40, placeholder: "예: 바로상점" })}
           {row("ownerName", "대표자 성명", { maxLength: 20, placeholder: "예: 홍길동" })}

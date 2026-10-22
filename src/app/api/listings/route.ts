@@ -16,6 +16,7 @@ export const GET = handle(async (req) => {
     dealsOnly: p.get("deals") === "1",
     includeSold: p.get("includeSold") === "1" || seller === "me",
     includeDrafts: seller === "me",
+    includeUsed: seller === "me",
   });
   return json({ listings: await withStats(applySearch(listings, parseSearch(p))) });
 });

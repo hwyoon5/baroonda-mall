@@ -30,6 +30,8 @@ export type Listing = {
   condition: Condition;
   pricePi: number;
   originalPricePi?: number;
+  /** 새 상품 전용: 판매자가 메인 '오늘의 특가'에 노출하기로 선택(정가 > 판매가일 때만 저장) */
+  todayDeal?: boolean;
   negotiable: boolean;
   tradeMethods: TradeMethod[];
   meetingPlace?: string;

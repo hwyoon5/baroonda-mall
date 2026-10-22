@@ -1,5 +1,5 @@
 import { isListingCategory } from "@/lib/categories";
-import { isUsageGrade, type Listing, type ListingOption, type TradeMethod, type Variant } from "@/lib/types";
+import type { Listing, ListingOption, TradeMethod, Variant } from "@/lib/types";
 import { isBlobUrl, MAX_PHOTOS, MAX_VIDEOS } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS } from "@/lib/options";
 import { MAX_POLICY_CHARS, hasPolicy } from "@/lib/business";
@@ -18,18 +18,15 @@ export type ListingInput = Partial<{
   condition: string;
   pricePi: number;
   originalPricePi: number | null;
-  negotiable: boolean;
+  todayDeal: boolean;
   tradeMethods: string[];
   meetingPlace: string;
-  location: string;
   fastShipping: boolean;
   images: string[];
   videos: string[];
   stock: number;
   options: unknown;
   variants: unknown;
-  usageGrade: string;
-  usageNote: string;
   policy: { returnPolicy?: unknown; shippingInfo?: unknown; legalNotice?: unknown; shipping?: unknown } | null;
   draft: boolean;
 }>;
@@ -73,6 +70,7 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
   const need = (ok: unknown, msg: string) => {
     if (!ok && !draft) throw new HttpError(400, msg);
   };
+  if (b.condition !== undefined && b.condition !== "new") throw new HttpError(400, "새 상품(정식 판매)만 등록할 수 있어요. 개인 중고 거래는 지원하지 않아요.");
   const title = str(b.title, 40);
   if (!title) throw new HttpError(400, "제목을 입력해 주세요.");
   const category = str(b.category, 20);
@@ -83,21 +81,20 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
   const tradeMethods = [...new Set((b.tradeMethods ?? []).filter((m): m is TradeMethod => m === "direct" || m === "delivery"))];
   need(tradeMethods.length > 0, "거래 방식을 하나 이상 선택해 주세요.");
 
-  // 판매 유형별 입력: 개인 중고 = 1개 + 사용감, 새 상품(정식 판매) = 재고 + 옵션(조합별 재고)
-  const isNew = b.condition === "new";
-  const options = isNew ? parseOptions(b.options) : undefined;
+  // 새 상품(정식 판매) = 재고 + 옵션(조합별 재고)
+  const options = parseOptions(b.options);
   const variants = options ? buildVariants(options, b.variants, draft) : undefined;
-  let stock: number | undefined;
-  if (isNew) {
-    if (variants) {
-      stock = variants.reduce((s, v) => s + v.stock, 0);
-      need(stock >= 1, "옵션별 재고를 1개 이상 입력해 주세요.");
-    } else {
-      need(isQty(b.stock, 1), "재고 수량은 1~9999개로 입력해 주세요.");
-      stock = isQty(b.stock, 0) ? b.stock : 0;
-    }
+  let stock: number;
+  if (variants) {
+    stock = variants.reduce((s, v) => s + v.stock, 0);
+    need(stock >= 1, "옵션별 재고를 1개 이상 입력해 주세요.");
+  } else {
+    need(isQty(b.stock, 1), "재고 수량은 1~9999개로 입력해 주세요.");
+    stock = isQty(b.stock, 0) ? b.stock : 0;
   }
-  need(isNew || isUsageGrade(b.usageGrade), "사용감을 선택해 주세요.");
+  const discounted = pricePi !== null && !!originalPricePi && originalPricePi > pricePi;
+  const todayDeal = b.todayDeal === true;
+  need(!todayDeal || discounted, "오늘의 특가로 노출하려면 판매 가격보다 높은 정가를 입력해 주세요.");
 
   const images = b.images ?? [];
   if (!Array.isArray(images) || images.length > MAX_PHOTOS) throw new HttpError(400, `사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`);
@@ -109,7 +106,7 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
   const videos = b.videos ?? [];
   if (!Array.isArray(videos) || videos.length > MAX_VIDEOS) throw new HttpError(400, `동영상은 최대 ${MAX_VIDEOS}개까지 올릴 수 있어요.`);
   if (!videos.every((src) => isBlobUrl(src, "video"))) throw new HttpError(400, "동영상 형식이 올바르지 않아요.");
-  const rawPolicy = isNew && b.policy && typeof b.policy === "object" ? b.policy : undefined;
+  const rawPolicy = b.policy && typeof b.policy === "object" ? b.policy : undefined;
   const policy = rawPolicy && {
     returnPolicy: str(rawPolicy.returnPolicy, MAX_POLICY_CHARS) || undefined,
     shippingInfo: str(rawPolicy.shippingInfo, MAX_POLICY_CHARS) || undefined,
@@ -122,19 +119,22 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
     brand: str(b.brand, 30) || undefined,
     description: str(b.description, 2000),
     category: isListingCategory(category) ? category : "",
-    condition: isNew ? "new" : "used",
+    condition: "new",
     pricePi: price,
     originalPricePi: originalPricePi && originalPricePi > price ? originalPricePi : undefined,
-    negotiable: !isNew && Boolean(b.negotiable),
+    todayDeal: todayDeal && discounted ? true : undefined,
+    negotiable: false,
     tradeMethods,
     meetingPlace: tradeMethods.includes("direct") ? str(b.meetingPlace, 60) || undefined : undefined,
-    location: str(b.location, 30) || undefined,
     fastShipping: tradeMethods.includes("delivery") && Boolean(b.fastShipping),
     images,
     videos: videos.length ? videos : undefined,
-    ...(isNew
-      ? { stock, committed: 0, soldCount: 0, options, variants, policy: hasPolicy(policy) ? policy : undefined }
-      : { usageGrade: isUsageGrade(b.usageGrade) ? b.usageGrade : undefined, usageNote: str(b.usageNote, 300) || undefined }),
+    stock,
+    committed: 0,
+    soldCount: 0,
+    options,
+    variants,
+    policy: hasPolicy(policy) ? policy : undefined,
     emoji: "📦",
     bg: "bg-violet-50",
   };

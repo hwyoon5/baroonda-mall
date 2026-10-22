@@ -24,7 +24,6 @@ export type SearchState = {
   sort: SortId;
   min?: number;
   max?: number;
-  kind?: "new" | "used";
   cat?: string;
   brands: string[];
   trade?: TradeMethod;
@@ -47,7 +46,6 @@ export const brandKey = (b: string) => b.trim().toLowerCase();
 /** URL 검색 조건 파싱. 잘못된 값은 무시하고 기본값을 쓴다. (서버·화면 공용) */
 export function parseSearch(p: Raw): SearchState {
   const sort = get(p, "sort");
-  const kind = get(p, "kind");
   const trade = get(p, "trade");
   const cat = get(p, "cat");
   let min = amount(get(p, "min"));
@@ -58,7 +56,6 @@ export function parseSearch(p: Raw): SearchState {
     sort: SORTS.some((s) => s.id === sort) ? (sort as SortId) : "recent",
     min,
     max,
-    kind: kind === "new" || kind === "used" ? kind : undefined,
     cat: listingCategories.some((c) => c.id === cat) ? cat : undefined,
     brands: [...new Set(get(p, "brand").split(",").map((b) => b.trim().slice(0, 30)).filter(Boolean))].slice(0, 10),
     trade: trade === "direct" || trade === "delivery" ? trade : undefined,
@@ -73,7 +70,6 @@ export function toQuery(s: SearchState) {
   if (s.sort !== "recent") p.set("sort", s.sort);
   if (s.min !== undefined) p.set("min", String(s.min));
   if (s.max !== undefined) p.set("max", String(s.max));
-  if (s.kind) p.set("kind", s.kind);
   if (s.cat) p.set("cat", s.cat);
   if (s.brands.length) p.set("brand", s.brands.join(","));
   if (s.trade) p.set("trade", s.trade);
@@ -83,9 +79,9 @@ export function toQuery(s: SearchState) {
 }
 
 export const activeFilterCount = (s: SearchState) =>
-  [s.min !== undefined || s.max !== undefined, s.kind, s.cat, s.brands.length, s.trade, s.fast, s.avail].filter(Boolean).length;
+  [s.min !== undefined || s.max !== undefined, s.cat, s.brands.length, s.trade, s.fast, s.avail].filter(Boolean).length;
 
-export const NO_FILTERS: Partial<SearchState> = { min: undefined, max: undefined, kind: undefined, cat: undefined, brands: [], trade: undefined, fast: false, avail: false };
+export const NO_FILTERS: Partial<SearchState> = { min: undefined, max: undefined, cat: undefined, brands: [], trade: undefined, fast: false, avail: false };
 
 export const isAvailable = (l: Listing) => l.status === "selling" && !(l.condition === "new" && (l.stock ?? 1) <= 0);
 
@@ -96,7 +92,6 @@ export function filterListings(items: Listing[], s: SearchState, skip?: "brand" 
     (l) =>
       (s.min === undefined || l.pricePi >= s.min) &&
       (s.max === undefined || l.pricePi <= s.max) &&
-      (!s.kind || l.condition === s.kind) &&
       (skip === "cat" || !s.cat || l.category === s.cat) &&
       (skip === "brand" || !brands.size || (!!l.brand && brands.has(brandKey(l.brand)))) &&
       (!s.trade || l.tradeMethods.includes(s.trade)) &&

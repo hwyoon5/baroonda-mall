@@ -1,13 +1,13 @@
 import Link from "next/link";
 import SubHeader from "@/components/SubHeader";
-import { listingCategories, usedCategory } from "@/lib/categories";
+import { listingCategories } from "@/lib/categories";
 
 export default function CategoriesPage() {
   return (
     <>
       <SubHeader title="카테고리" back={false} />
       <ul className="grid grid-cols-3 gap-3 bg-white p-4">
-        {[usedCategory, ...listingCategories].map((c) => (
+        {listingCategories.map((c) => (
           <li key={c.id}>
             <Link href={c.href} className="tap flex flex-col items-center gap-2 rounded-xl border border-gray-100 py-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}

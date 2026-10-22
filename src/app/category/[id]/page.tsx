@@ -1,36 +1,22 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import ListingGrid from "@/components/ListingGrid";
 import SubHeader from "@/components/SubHeader";
-import UsedSubCategories, { usedSubCategories } from "@/components/UsedSubCategories";
 import { findCategory } from "@/lib/categories";
 import { listListings, withStats } from "@/lib/server/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function CategoryPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ sub?: string }> }) {
+export default async function CategoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // 예전 '중고마켓' 주소는 메인으로 보낸다.
+  if (id === "used") redirect("/");
   const category = findCategory(id);
   if (!category) notFound();
   const items = await withStats(await listListings({ category: id }));
-  if (id !== "used") {
-    return (
-      <>
-        <SubHeader title={category.name} />
-        <ListingGrid items={items} emptyText={`${category.name}에 등록된 상품이 아직 없어요.`} />
-      </>
-    );
-  }
-  const subId = (await searchParams).sub;
-  const sub = usedSubCategories.find((c) => c.id === subId);
   return (
     <>
       <SubHeader title={category.name} />
-      <UsedSubCategories items={items} active={sub?.id} />
-      <ListingGrid
-        items={sub ? items.filter((l) => l.category === sub.id) : items}
-        layout="list"
-        emptyText={sub ? `중고 ${sub.name} 상품이 아직 없어요.` : `${category.name}에 등록된 상품이 아직 없어요.`}
-      />
+      <ListingGrid items={items} emptyText={`${category.name}에 등록된 상품이 아직 없어요.`} />
     </>
   );
 }

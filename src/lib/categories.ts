@@ -21,17 +21,13 @@ export const listingCategories: Category[] = [
   cat("pet", "반려동물", "🐶", "bg-lime-50"),
 ];
 
-/** '중고마켓'은 카테고리가 아니라 상품 상태(condition=used) 필터 */
-export const usedCategory: Category = { ...cat("used", "중고마켓", "🤝", "bg-violet-100"), badge: "NEW" };
-
 export const homeCategories: Category[] = [
-  usedCategory,
   ...listingCategories,
   { id: "all", name: "전체보기", icon: "➕", bg: "bg-violet-50", href: "/categories", image: "/images/categories/all.jpg" },
 ];
 
 export function findCategory(id: string) {
-  return [usedCategory, ...listingCategories].find((c) => c.id === id);
+  return listingCategories.find((c) => c.id === id);
 }
 
 export function isListingCategory(id: string) {

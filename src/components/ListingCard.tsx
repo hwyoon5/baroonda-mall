@@ -17,9 +17,6 @@ export default function ListingCard({ listing: l }: { listing: Listing }) {
         <ListingThumb listing={l} className="aspect-square rounded-xl" />
         <div className="mt-2 flex flex-wrap gap-1">
           {l.fastShipping && <FastDeliveryTag compact />}
-          {l.condition === "used" && (
-            <span className="rounded-sm bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold leading-none text-pi">중고</span>
-          )}
           {l.tradeMethods.map((m) => (
             <TradeMethodTag key={m} method={m} />
           ))}

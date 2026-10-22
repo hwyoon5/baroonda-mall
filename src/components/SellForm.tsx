@@ -12,7 +12,7 @@ import { MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, hasPolicy, hasShipping
 import { listingCategories } from "@/lib/categories";
 import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS, optionPresetsFor, presetValuesFor, type OptionPreset } from "@/lib/options";
-import { usageGradeLabel, type Condition, type Listing, type TradeMethod, type UsageGrade } from "@/lib/types";
+import type { Listing } from "@/lib/types";
 import { useStore } from "./store/StoreProvider";
 
 
@@ -24,11 +24,6 @@ const cartesian = (opts: { name: string; values: string[] }[]) =>
 type OptionDraft = { name: string; values: string };
 
 const splitValues = (v: string) => [...new Set(v.split(",").map((x) => x.trim()).filter(Boolean))].slice(0, MAX_OPTION_VALUES);
-
-const saleKinds = [
-  { v: "new", t: "새 상품(정식 판매)", d: "재고·옵션이 있는 새 상품" },
-  { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
-] as const;
 
 /** Blob 저장소가 있으면 1280px JPEG로 업로드해 URL을, 없으면 720px data URL을 만든다. */
 async function preparePhoto(file: File, blob: boolean): Promise<string> {
@@ -51,9 +46,6 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const [title, setTitle] = useState("");
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("");
-  const [kind, setKind] = useState<Condition>("new");
-  const [usageGrade, setUsageGrade] = useState<UsageGrade>("A");
-  const [usageNote, setUsageNote] = useState("");
   const [stock, setStock] = useState("10");
   const [options, setOptions] = useState<OptionDraft[]>([]);
   const [variantStock, setVariantStock] = useState<Record<string, string>>({});
@@ -79,22 +71,16 @@ export default function SellForm({ draftId }: { draftId?: string }) {
     if (!draftId) return;
     api<{ listing: Listing }>(`/api/listings/${draftId}`)
       .then(({ listing: l }) => {
-        setKind(l.condition);
         setTitle(l.title);
         setBrand(l.brand ?? "");
         setCategory(l.category);
         setPrice(l.pricePi ? String(l.pricePi) : "");
         setOriginalPrice(l.originalPricePi ? String(l.originalPricePi) : "");
-        setNegotiable(l.negotiable);
-        setMethods(l.tradeMethods);
+        setTodayDeal(!!l.todayDeal);
         setFastShipping(l.fastShipping);
-        setMeetingPlace(l.meetingPlace ?? "");
-        setLocation(l.location ?? "");
         setDescription(l.description);
         setPhotos(l.images);
         setVideos(l.videos ?? []);
-        if (l.usageGrade) setUsageGrade(l.usageGrade);
-        setUsageNote(l.usageNote ?? "");
         if (l.stock) setStock(String(l.stock));
         setOptions((l.options ?? []).map((o) => ({ name: o.name, values: o.values.join(", ") })));
         setVariantStock(Object.fromEntries((l.variants ?? []).map((v) => [comboKey(v.options), String(v.stock)])));
@@ -107,17 +93,13 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   }, [draftId]);
   const [price, setPrice] = useState("");
   const [originalPrice, setOriginalPrice] = useState("");
-  const [negotiable, setNegotiable] = useState(false);
-  const [methods, setMethods] = useState<TradeMethod[]>(["delivery"]);
+  const [todayDeal, setTodayDeal] = useState(false);
   const [fastShipping, setFastShipping] = useState(false);
-  const [meetingPlace, setMeetingPlace] = useState("");
-  const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const priceNum = Number(price);
-  const isNew = kind === "new";
   const presets = optionPresetsFor(category);
   const suggestedGroups = presets.filter((p) => !options.some((o) => o.name.trim() === p.name));
   const categoryName = listingCategories.find((c) => c.id === category)?.name;
@@ -125,7 +107,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
     .map((o) => ({ name: o.name.trim(), values: splitValues(o.values) }))
     .filter((o) => o.name || o.values.length);
   const optionsValid = parsedOptions.every((o) => o.name && o.values.length > 0);
-  const combos = isNew && optionsValid && parsedOptions.length ? cartesian(parsedOptions) : [];
+  const combos = optionsValid && parsedOptions.length ? cartesian(parsedOptions) : [];
   const stockOf = (c: Record<string, string>) => Number(variantStock[comboKey(c)]) || 0;
   const variantTotal = combos.reduce((sum, c) => sum + stockOf(c), 0);
   const soldOutCount = combos.filter((c) => stockOf(c) === 0).length;
@@ -135,10 +117,17 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const bulkQtyValid = /^\d{1,4}$/.test(bulkQty);
   const stockNum = Number(stock);
   const stockValid = Number.isInteger(stockNum) && stockNum >= 1 && stockNum <= 9999;
-  const needsBusiness = isNew && business === null;
+  const needsBusiness = business === null;
+  const discounted = priceNum > 0 && Number(originalPrice) > priceNum;
   const valid =
-    (!isNew || !!business) &&
-    title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && (isNew || methods.length > 0) && (!isNew || (optionsValid && (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid)));
+    !!business &&
+    (!todayDeal || discounted) &&
+    title.trim() !== "" &&
+    category !== "" &&
+    price !== "" &&
+    priceNum > 0 &&
+    optionsValid &&
+    (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid);
   const updateOption = (i: number, patch: Partial<OptionDraft>) => setOptions((cur) => cur.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
   const addOptionGroup = (p?: OptionPreset) =>
@@ -154,8 +143,6 @@ export default function SellForm({ draftId }: { draftId?: string }) {
       return next;
     });
   };
-
-  const toggleMethod = (m: TradeMethod) => setMethods((cur) => (cur.includes(m) ? cur.filter((x) => x !== m) : [...cur, m]));
 
   const uploading = photoUploads > 0 || videoProgress !== null;
 
@@ -201,24 +188,19 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         title,
         brand,
         category,
-        condition: kind,
+        condition: "new",
         pricePi: priceNum,
-        ...(isNew
-          ? {
-              stock: stockNum,
-              options: parsedOptions,
-              variants: combos.map((c) => ({ options: c, stock: Number(variantStock[comboKey(c)]) || 0 })),
-              originalPricePi: originalPrice ? Number(originalPrice) : null,
-            }
-          : { usageGrade, usageNote, negotiable }),
-        tradeMethods: isNew ? ["delivery"] : methods,
+        stock: stockNum,
+        options: parsedOptions,
+        variants: combos.map((c) => ({ options: c, stock: Number(variantStock[comboKey(c)]) || 0 })),
+        originalPricePi: originalPrice ? Number(originalPrice) : null,
+        todayDeal,
+        tradeMethods: ["delivery"],
         fastShipping,
-        meetingPlace: isNew ? "" : meetingPlace,
-        location: isNew ? "" : location,
         description,
         images: photos,
         videos,
-        policy: isNew && customPolicy ? { ...policy, shipping: shipDraft } : null,
+        policy: customPolicy ? { ...policy, shipping: shipDraft } : null,
       };
       const { listing } = draftId
         ? await api<{ listing: Listing }>(`/api/listings/${draftId}`, body, "PUT")
@@ -248,24 +230,6 @@ export default function SellForm({ draftId }: { draftId?: string }) {
 
   return (
     <form onSubmit={submit} className="space-y-5 bg-white px-4 py-4">
-      <div role="tablist" aria-label="판매 유형" className="grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1">
-        {saleKinds.map((k) => {
-          const on = kind === k.v;
-          return (
-            <button
-              key={k.v}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => setKind(k.v)}
-              className={`tap rounded-lg px-2 py-2 text-center ${on ? "bg-white shadow-sm ring-1 ring-pi/30" : ""}`}
-            >
-              <span className={`block text-sm font-bold ${on ? "text-pi" : "text-gray-500"}`}>{k.t}</span>
-              <span className="text-[10px] text-gray-400">{k.d}</span>
-            </button>
-          );
-        })}
-      </div>
       <div>
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {photos.length + photoUploads < MAX_PHOTOS && (
@@ -387,39 +351,6 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         </div>
       </fieldset>
 
-      {!isNew ? (
-        <fieldset>
-          <legend className={label}>
-            사용감 <span className="text-red-500">*</span>
-          </legend>
-          <div className="grid grid-cols-4 gap-1.5">
-            {(Object.keys(usageGradeLabel) as UsageGrade[]).map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setUsageGrade(g)}
-                aria-pressed={usageGrade === g}
-                className={`tap rounded-lg border px-1 py-2 text-center text-xs font-medium ${usageGrade === g ? "border-pi bg-pi text-white" : "border-gray-200 text-gray-600"}`}
-              >
-                {usageGradeLabel[g]}
-              </button>
-            ))}
-          </div>
-          <label htmlFor={`${id}-usage`} className="mb-1.5 mt-3 block text-xs font-bold text-gray-700">
-            사용감·하자 설명
-          </label>
-          <textarea
-            id={`${id}-usage`}
-            value={usageNote}
-            onChange={(e) => setUsageNote(e.target.value)}
-            rows={3}
-            maxLength={300}
-            placeholder="사용 기간, 흠집·하자, 구성품 여부 등을 적어주세요."
-            className={`${input} resize-none`}
-          />
-          <p className="mt-1.5 text-[11px] text-gray-500">개인 중고는 수량 1개로 등록되고, 구매 확정되면 거래완료로 바뀌어요.</p>
-        </fieldset>
-      ) : (
         <>
           {combos.length === 0 && (
           <div>
@@ -608,9 +539,8 @@ export default function SellForm({ draftId }: { draftId?: string }) {
             </div>
           )}
         </>
-      )}
 
-      <div className={isNew ? "grid grid-cols-2 gap-3" : ""}>
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <label htmlFor={`${id}-price`} className={label}>
             판매 가격 <span className="text-red-500">*</span>
@@ -630,7 +560,6 @@ export default function SellForm({ draftId }: { draftId?: string }) {
             />
           </div>
         </div>
-        {isNew && (
         <div>
           <label htmlFor={`${id}-orig`} className={label}>
             정가 <span className="text-xs font-normal text-gray-400">(선택)</span>
@@ -650,74 +579,21 @@ export default function SellForm({ draftId }: { draftId?: string }) {
             />
           </div>
         </div>
-        )}
       </div>
-      {!isNew && (
+        <div className="-mt-2">
+          <label className={`tap flex items-center justify-between gap-3 rounded-xl border px-3 py-3 ${todayDeal ? "border-red-300 bg-red-50" : "border-gray-200"}`}>
+            <span>
+              <span className="block text-sm font-bold text-gray-900">🔥 메인 &apos;오늘의 특가&apos;에 노출</span>
+              <span className="text-[11px] text-gray-500">정가보다 싸게 파는 상품만 노출돼요. 할인율이 함께 표시돼요.</span>
+            </span>
+            <input type="checkbox" role="switch" checked={todayDeal} onChange={(e) => setTodayDeal(e.target.checked)} className="h-5 w-5 shrink-0 accent-red-500" />
+          </label>
+          {todayDeal && !discounted && <p className="mt-1 text-xs text-red-500">판매 가격보다 높은 정가를 입력해야 오늘의 특가로 노출할 수 있어요.</p>}
+        </div>
       <label className="-mt-2 flex items-center gap-2 text-sm text-gray-700">
-        <input type="checkbox" checked={negotiable} onChange={(e) => setNegotiable(e.target.checked)} className="h-4 w-4 accent-pi" />
-        가격 제안 받기
+        <input type="checkbox" checked={fastShipping} onChange={(e) => setFastShipping(e.target.checked)} className="h-4 w-4 accent-pi" />
+        24시간 안에 발송할게요 <span className="text-xs font-bold text-amber-700">⚡빠른배송</span>
       </label>
-      )}
-
-      {isNew ? (
-        <label className="-mt-2 flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={fastShipping} onChange={(e) => setFastShipping(e.target.checked)} className="h-4 w-4 accent-pi" />
-          24시간 안에 발송할게요 <span className="text-xs font-bold text-amber-700">⚡빠른배송</span>
-        </label>
-      ) : (
-      <fieldset>
-        <legend className={label}>
-          거래 방식 <span className="text-red-500">*</span>
-          <span className="ml-1 text-xs font-normal text-gray-400">(중복 선택 가능)</span>
-        </legend>
-        <div className="grid grid-cols-2 gap-2">
-          {(
-            [
-              { m: "delivery", t: "택배", d: "택배로 보내드려요" },
-              { m: "direct", t: "직거래", d: "만나서 전달해요" },
-            ] as const
-          ).map(({ m, t, d }) => {
-            const on = methods.includes(m);
-            return (
-              <button
-                key={m}
-                type="button"
-                onClick={() => toggleMethod(m)}
-                aria-pressed={on}
-                className={`tap rounded-xl border px-3 py-2.5 text-left ${on ? "border-pi bg-pi/5 ring-1 ring-pi" : "border-gray-200"}`}
-              >
-                <span className={`block text-sm font-bold ${on ? "text-pi" : "text-gray-800"}`}>{t}</span>
-                <span className="text-[11px] text-gray-500">{d}</span>
-              </button>
-            );
-          })}
-        </div>
-        {methods.includes("delivery") && (
-          <label className="mt-2 flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={fastShipping} onChange={(e) => setFastShipping(e.target.checked)} className="h-4 w-4 accent-pi" />
-            24시간 안에 발송할게요 <span className="text-xs font-bold text-amber-700">⚡빠른배송</span>
-          </label>
-        )}
-      </fieldset>
-      )}
-
-      {!isNew && methods.includes("direct") && (
-        <div>
-          <label htmlFor={`${id}-place`} className={label}>
-            직거래 희망 장소
-          </label>
-          <input id={`${id}-place`} value={meetingPlace} onChange={(e) => setMeetingPlace(e.target.value)} placeholder="예) 강남역 11번 출구" className={input} />
-        </div>
-      )}
-
-      {!isNew && (
-        <div>
-          <label htmlFor={`${id}-loc`} className={label}>
-            내 동네
-          </label>
-          <input id={`${id}-loc`} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="예) 역삼동" className={input} />
-        </div>
-      )}
 
       <div>
         <label htmlFor={`${id}-desc`} className={label}>
@@ -728,13 +604,12 @@ export default function SellForm({ draftId }: { draftId?: string }) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={5}
-          placeholder={isNew ? "제품 구성·소재, 배송 안내, 교환/환불 정책 등을 적어주세요." : "구매 시기, 거래 시 참고할 점 등을 적어주세요."}
+          placeholder="제품 구성·소재, 배송 안내, 교환/환불 정책 등을 적어주세요."
           className={`${input} resize-none`}
         />
       </div>
 
-      {isNew &&
-        (needsBusiness ? (
+      {needsBusiness ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
             <p className="font-bold">새 상품(정식 판매)은 사업자 정보가 필요해요</p>
             <p className="mt-0.5">전자상거래법에 따라 사업자등록번호·통신판매업 신고번호 등을 등록한 판매자만 새 상품을 판매할 수 있어요. 작성 중인 내용은 [임시저장] 해 두세요.</p>
@@ -827,7 +702,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
               )}
             </div>
           </>
-        ) : null)}
+        ) : null}
 
       <p className="rounded-lg bg-violet-50 p-3 text-xs leading-relaxed text-pi">
         구매자는 π로만 결제해요. 결제 금액은 바로온다가 보관하다가 구매자가 구매 확정하면 판매자에게 정산돼요.
@@ -848,7 +723,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
           disabled={!valid || busy || loading || uploading}
           className="tap flex-1 rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400"
         >
-          {uploading ? "업로드 중…" : busy ? "저장 중…" : isNew ? "새 상품 등록하기" : "중고 판매글 등록하기"}
+          {uploading ? "업로드 중…" : busy ? "저장 중…" : "새 상품 등록하기"}
         </button>
       </div>
     </form>

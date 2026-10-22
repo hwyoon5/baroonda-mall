@@ -87,7 +87,7 @@ export default function MyPage() {
               <MenuRow href="/orders?tab=sales" icon="📦" label="판매 내역" desc="결제 완료·발송·구매 확정 현황" />
               <MenuRow href="/my/payouts" icon="💰" label="정산·환불 내역" desc="구매 확정 → 판매대금 π 정산(A2U), 환불 현황" />
               <MenuRow href="/my/shorts" icon="🎬" label="내 쇼츠 관리" desc="촬영·업로드로 쇼츠 등록, 상품 연결·숨기기" />
-              <MenuRow href="/sell" icon="✏️" label="상품 등록하기" desc="개인 중고 / 새 상품(정식 판매)" />
+              <MenuRow href="/sell" icon="✏️" label="상품 등록하기" desc="새 상품(정식 판매)" />
               <MenuRow href="/my/business" icon="🏢" label="사업자 정보" desc="새 상품(정식 판매) 판매 시 필수 · 통신판매업 신고" />
             </ul>
           </section>
