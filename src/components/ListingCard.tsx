@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { discountRate } from "@/lib/format";
 import type { Listing } from "@/lib/types";
+import CardMeta from "./CardMeta";
 import FastDeliveryTag from "./FastDeliveryTag";
 import ListingThumb from "./ListingThumb";
 import PiPrice from "./PiPrice";
@@ -31,6 +32,7 @@ export default function ListingCard({ listing: l }: { listing: Listing }) {
           <PiPrice value={l.pricePi} size="lg" />
         </div>
         {l.condition === "used" && <TradeArea location={l.location} className="mt-1 text-xs" />}
+        <CardMeta listing={l} />
         <div className="mt-1">
           <SellerInfo seller={l.seller} location={l.condition === "used" ? undefined : l.location} createdAt={l.createdAt} />
         </div>

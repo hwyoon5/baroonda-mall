@@ -8,10 +8,11 @@ import SellerInfo from "@/components/SellerInfo";
 import SubHeader from "@/components/SubHeader";
 import TradeArea from "@/components/TradeArea";
 import TradeMethodTag from "@/components/TradeMethodTag";
+import ViewTracker from "@/components/ViewTracker";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
 import ShippingTable from "@/components/ShippingTable";
-import { POLICY_FIELDS, formatBizRegNo, hasPolicy, pickPolicy } from "@/lib/business";
+import { POLICY_FIELDS, effectiveShipping, formatBizRegNo, hasPolicy, pickPolicy } from "@/lib/business";
 import { getBusiness, getListing, listReviewsForSeller } from "@/lib/server/db";
 import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
@@ -25,7 +26,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const listing = await getListing((await params).id);
   if (!listing || listing.status === "draft") notFound();
   const sellerReviews = await listReviewsForSeller(listing.seller.uid);
-  const business = listing.condition === "new" && !listing.demo ? await getBusiness(listing.seller.uid) : undefined;
+  const business = listing.condition === "new" ? await getBusiness(listing.seller.uid) : undefined;
   const policy = listing.condition === "new" ? (listing.policy ?? (business ? pickPolicy(business) : undefined)) : undefined;
   const sellerRating = sellerReviews.length ? (sellerReviews.reduce((a, r) => a + r.rating, 0) / sellerReviews.length).toFixed(1) : null;
   const category = findCategory(listing.category);
@@ -35,6 +36,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <SubHeader title={listing.title} />
+      <ViewTracker id={listing.id} />
       {listing.images.length > 1 || videos.length ? (
         <div className="relative">
           <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">
@@ -191,7 +193,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       )}
 
       <div className="h-16" aria-hidden />
-      <BuyBar listing={listing} />
+      <BuyBar listing={listing} shipping={effectiveShipping(listing, business)} />
     </>
   );
 }

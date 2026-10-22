@@ -24,7 +24,7 @@ export type SellerBusiness = {
   updatedAt: string;
 };
 
-/** 배송·반품 조건. 금액은 π 단위 안내용이며 결제 금액에는 더하지 않는다. */
+/** 배송·반품 조건(π 단위). 기본 배송비와 제주·도서산간 추가비는 주문 시 결제 금액에 더한다(shippingFeeFor). */
 export type ShippingTerms = {
   method?: string;
   courier?: string;
@@ -79,7 +79,26 @@ export function normalizeShipping(v: unknown): { terms?: ShippingTerms; error?: 
   return Object.keys(terms).length ? { terms } : {};
 }
 
+/** 결제에 더할 배송비. 무료배송 기준은 상품 금액으로 판단하고, 제주·도서산간 추가비는 무료배송이어도 더한다. */
+export function shippingFeeFor(t: ShippingTerms | undefined, itemPrice: number, remoteArea = false) {
+  if (!t) return 0;
+  const base = t.fee && !(t.freeOver && itemPrice >= t.freeOver) ? t.fee : 0;
+  return addPi(base, remoteArea ? (t.remoteFee ?? 0) : 0);
+}
+export const addPi = (a: number, b: number) => Math.round((a + b) * 1e7) / 1e7;
+
+/** 새 상품에 실제 적용되는 배송 조건: 상품별 규정이 있으면 그것, 없으면 판매자 사업자 정보 (상세 표시와 동일) */
+export const effectiveShipping = (l: { condition: string; policy?: SellerPolicy }, business?: { shipping?: ShippingTerms }) =>
+  l.condition !== "new" ? undefined : l.policy ? l.policy.shipping : business?.shipping;
+
 export const hasShipping = (t?: ShippingTerms) => !!t && Object.keys(t).length > 0;
+
+/** 새 상품 카드 한 줄 배송 문구. 직거래만·중고·정보 없음은 undefined(거래 방법 태그로 충분) */
+export function cardShippingText(l: { pricePi: number; condition: string; tradeMethods: string[] }, t?: ShippingTerms) {
+  if (!l.tradeMethods.includes("delivery") || l.condition !== "new" || t?.fee === undefined) return undefined;
+  if (t.fee === 0 || (t.freeOver !== undefined && l.pricePi >= t.freeOver)) return "무료배송";
+  return t.freeOver !== undefined ? `배송비 ${t.fee}π · ${t.freeOver}π 이상 무료` : `배송비 ${t.fee}π`;
+}
 
 /** 상품 상세·미리보기용 표 행 */
 export function shippingRows(t: ShippingTerms): [string, string][] {

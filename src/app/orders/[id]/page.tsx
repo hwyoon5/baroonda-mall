@@ -1,6 +1,6 @@
 "use client";
 
-import { formatOption } from "@/lib/format";
+import { formatOption, formatPi } from "@/lib/format";
 import Link from "next/link";
 import { use, useEffect, useState } from "react";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
@@ -110,6 +110,14 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
               <span className="inline-block w-20 text-gray-500">구매자</span>
               {order.buyer.username}
             </p>
+            {order.shippingFee !== undefined && (
+              <p>
+                <span className="inline-block w-20 text-gray-500">결제 내역</span>
+                상품 π {formatPi(order.itemAmount ?? order.amount - order.shippingFee)} + 배송비 {order.shippingFee ? `π ${formatPi(order.shippingFee)}` : "무료"}
+                {order.remoteArea && <span className="text-gray-500"> (제주·도서산간)</span>}
+                {order.pickup && <span className="text-gray-500"> · 직거래 수령</span>}
+              </p>
+            )}
             {order.fulfillment && (
               <p>
                 <span className="inline-block w-20 text-gray-500">배송</span>

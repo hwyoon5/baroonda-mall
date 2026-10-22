@@ -77,7 +77,7 @@ export default function ShippingTermsFields({
         {shows("requestDays") && num("requestDays", "반품·교환 신청 기한", "일", true)}
       </div>
       {part !== "shipping" && <p className="text-[11px] leading-relaxed text-gray-400">
-        배송비를 0으로 쓰면 무료배송으로 표시돼요. 신청 기한은 전자상거래법상 최소 {MIN_REQUEST_DAYS}일이에요. 금액은 안내용이며 결제 금액에 더해지지 않아요.
+        배송비를 0으로 쓰면 무료배송으로 표시돼요. 신청 기한은 전자상거래법상 최소 {MIN_REQUEST_DAYS}일이에요. 기본 배송비와 제주·도서산간 추가 배송비는 구매자 결제 금액에 함께 더해져요(무료배송 기준은 상품 금액으로 판단).
       </p>}
       {error && <p className="text-[11px] text-red-500">{error}</p>}
     </div>

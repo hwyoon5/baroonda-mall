@@ -1,4 +1,5 @@
-import { getListing, listOrdersFor, newId, saveOrder } from "@/lib/server/db";
+import { addPi, effectiveShipping, shippingFeeFor } from "@/lib/business";
+import { getBusiness, getListing, isUnclaimedDemo, listOrdersFor, newId, saveOrder } from "@/lib/server/db";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
 import { formatOption } from "@/lib/format";
 import type { Order } from "@/lib/types";
@@ -8,10 +9,10 @@ export const GET = handle(async (req) => json(await listOrdersFor(requireUser(re
 /** 구매 시작: 주문을 만들고 Pi.createPayment에 넘길 결제 데이터를 돌려준다. */
 export const POST = handle(async (req) => {
   const buyer = requireUser(req);
-  const { listingId, option } = await readJson<{ listingId?: string; option?: Record<string, unknown> }>(req);
+  const { listingId, option, remoteArea, pickup } = await readJson<{ listingId?: string; option?: Record<string, unknown>; remoteArea?: boolean; pickup?: boolean }>(req);
   const listing = listingId ? await getListing(listingId) : undefined;
   if (!listing) throw new HttpError(404, "상품을 찾을 수 없어요.");
-  if (listing.demo) throw new HttpError(400, "예시 상품은 구매할 수 없어요.");
+  if (isUnclaimedDemo(listing)) throw new HttpError(503, "예시 상품 판매자(운영자) 계정이 아직 연결되지 않아 결제할 수 없어요. 잠시 후 다시 시도해 주세요.");
   if (listing.seller.uid === buyer.uid) throw new HttpError(400, "내가 올린 상품은 구매할 수 없어요.");
   if (listing.status !== "selling" || (listing.condition === "new" && (listing.stock ?? 0) < 1)) {
     throw new HttpError(409, "판매 중인 상품이 아니거나 품절됐어요.");
@@ -32,6 +33,11 @@ export const POST = handle(async (req) => {
     if (variant.stock < 1) throw new HttpError(409, "선택한 옵션이 품절됐어요.");
     variantId = variant.id;
   }
+  const delivery = listing.tradeMethods.includes("delivery");
+  if (pickup === true && !listing.tradeMethods.includes("direct")) throw new HttpError(400, "직거래를 지원하지 않는 상품이에요.");
+  const shipped = delivery && pickup !== true;
+  const terms = shipped && listing.condition === "new" ? effectiveShipping(listing, await getBusiness(listing.seller.uid)) : undefined;
+  const shippingFee = shippingFeeFor(terms, listing.pricePi, remoteArea === true);
 
   const now = new Date().toISOString();
   const order: Order = {
@@ -41,7 +47,11 @@ export const POST = handle(async (req) => {
     listingThumb: listing.images[0] ? undefined : listing.emoji,
     option: selected,
     variantId,
-    amount: listing.pricePi,
+    amount: addPi(listing.pricePi, shippingFee),
+    itemAmount: listing.pricePi,
+    shippingFee,
+    remoteArea: shipped && remoteArea === true ? true : undefined,
+    pickup: delivery && pickup === true ? true : undefined,
     buyer,
     seller: listing.seller,
     status: "created",

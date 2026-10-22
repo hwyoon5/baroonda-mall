@@ -3,12 +3,15 @@ import ListingGrid from "@/components/ListingGrid";
 import SearchHeader from "@/components/SearchHeader";
 import TodayDeals from "@/components/TodayDeals";
 import Link from "next/link";
-import { listListings } from "@/lib/server/db";
+import { listListings, withStats } from "@/lib/server/db";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [deals, recent] = await Promise.all([listListings({ dealsOnly: true }), listListings()]);
+  const [allDeals, allRecent] = await Promise.all([listListings({ dealsOnly: true }), listListings()]);
+  const shown = await withStats([...allDeals.slice(0, 10), ...allRecent.filter((l) => l.condition !== "used").slice(0, 20)]);
+  const deals = shown.slice(0, Math.min(10, allDeals.length));
+  const recent = shown.slice(deals.length);
   return (
     <>
       <SearchHeader />
@@ -23,8 +26,8 @@ export default async function Home() {
           </Link>
         </div>
         <CategoryGrid />
-        <TodayDeals deals={deals.slice(0, 10)} />
-        <ListingGrid title="방금 올라온 상품" items={recent.slice(0, 20)} />
+        <TodayDeals deals={deals} />
+        <ListingGrid title="방금 올라온 상품" items={recent} />
       </main>
     </>
   );
