@@ -25,7 +25,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const listing = await getListing((await params).id);
   if (!listing || listing.status === "draft") notFound();
   const sellerReviews = await listReviewsForSeller(listing.seller.uid);
-  const business = listing.condition === "new" && !listing.demo ? await getBusiness(listing.seller.uid) : undefined;
+  const business = listing.condition === "new" ? await getBusiness(listing.seller.uid) : undefined;
   const policy = listing.condition === "new" ? (listing.policy ?? (business ? pickPolicy(business) : undefined)) : undefined;
   const sellerRating = sellerReviews.length ? (sellerReviews.reduce((a, r) => a + r.rating, 0) / sellerReviews.length).toFixed(1) : null;
   const category = findCategory(listing.category);

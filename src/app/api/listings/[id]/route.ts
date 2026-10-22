@@ -11,7 +11,6 @@ async function loadOwn(req: Request, id: string) {
   const user = requireUser(req);
   const listing = await getListing(id);
   if (!listing || listing.seller.uid !== user.uid) throw new HttpError(404, "내 상품을 찾을 수 없어요.");
-  if (listing.demo) throw new HttpError(400, "예시 상품은 수정할 수 없어요.");
   return { user, listing };
 }
 

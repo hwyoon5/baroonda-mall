@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const [allDeals, allRecent] = await Promise.all([listListings({ dealsOnly: true }), listListings()]);
-  const shown = await withStats([...allDeals.slice(0, 10), ...allRecent.slice(0, 20)]);
+  const shown = await withStats([...allDeals.slice(0, 10), ...allRecent.filter((l) => l.condition !== "used").slice(0, 20)]);
   const deals = shown.slice(0, Math.min(10, allDeals.length));
   const recent = shown.slice(deals.length);
   return (

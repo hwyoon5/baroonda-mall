@@ -1,6 +1,6 @@
 import type { Listing, PiUser, TradeMethod } from "./types";
 
-/** 화면 구성을 보여주기 위한 예시 판매글. demo=true 이므로 실제 결제는 막혀 있다. */
+/** 예시 판매글. 실제 상품과 똑같이 Pi로 결제되고, 소유·정산은 운영자 계정(DEMO_SELLER_USERNAME)이 맡는다. */
 const sellers: (PiUser & { location: string })[] = [
   { uid: "demo-1", username: "제주감귤농장", location: "제주시" },
   { uid: "demo-2", username: "파이오니어88", location: "역삼동" },
@@ -58,7 +58,7 @@ export function demoListings(): Listing[] {
       id: `demo${i + 1}`,
       title: s.title,
       brand: s.brand,
-      description: "바로온다 화면 구성을 보여주기 위한 예시 판매글이에요. 실제 구매는 할 수 없어요.",
+      description: "바로온다 테스트용 예시 판매글이에요. 구매하면 실제 상품과 똑같이 Pi 결제로 테스트가 진행돼요.",
       category: s.category,
       condition: s.used ? "used" : "new",
       pricePi: s.price,
