@@ -663,6 +663,26 @@ test("상품 카드: 판매자 동네 표기 없음", async () => {
   assert.ok(html.includes(`${tag} 새`) && !html.includes("새상품동"), "새 상품 카드에는 동네 없음");
 });
 
+test("신규 카테고리 예시 상품: 카테고리별 3개 이상, 카드·상세 정상 출력", async () => {
+  for (const [id, name] of [["interior", "인테리어/가구"], ["health", "건강/영양제"], ["books", "도서/티켓/서비스"]]) {
+    const { listings } = await ok(`/api/listings?category=${id}`);
+    const demos = listings.filter((l) => l.demo);
+    assert.ok(demos.length >= 3, `${id} 예시 상품 ${demos.length}개`);
+    const page = await (await fetch(`${BASE}/category/${id}`)).text();
+    for (const l of demos) {
+      assert.equal(l.condition, "new");
+      assert.equal(l.category, id);
+      assert.ok(l.pricePi > 0 && l.images.length === 1 && l.stock > 0, `${l.title} 데이터`);
+      assert.equal((await fetch(BASE + l.images[0])).status, 200, `${l.images[0]} 이미지`);
+      assert.ok(page.includes(l.title), `${id} 카드에 ${l.title}`);
+      const r = await fetch(`${BASE}/listings/${l.id}`);
+      const html = await r.text();
+      assert.equal(r.status, 200);
+      assert.ok(html.includes(l.title) && html.includes(name) && html.includes(l.description.split("\n")[0]), `${l.id} 상세`);
+    }
+  }
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

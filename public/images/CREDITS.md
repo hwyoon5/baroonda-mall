@@ -37,5 +37,12 @@
 | `public/images/listings/demo18.jpg` | [Gray Cat](https://stocksnap.io/photo/gray-cat-OU5O7ZUVH7) (stocksnap) | CC0 |
 | `public/images/listings/demo19.jpg` | [Shoes Sneakers](https://stocksnap.io/photo/shoes-sneakers-BVJ82E1ILO) (stocksnap) | CC0 |
 | `public/images/listings/demo20.jpg` | [Books Stacked](https://stocksnap.io/photo/books-stacked-W5VAXXV2RP) (stocksnap) | CC0 |
-| `public/images/listings/demo21.jpg` | [Handful of Cherry Tomatoes](https://www.flickr.com/photos/47121680@N00/48680268027) | flickr | CC0 |
-| `public/images/listings/demo22.jpg` | [Close faded texture denim jeans](https://www.rawpixel.com/image/5971356/photo-image-background-wallpaper-texture) | rawpixel | CC0 |
+| `public/images/listings/demo21.jpg` | [Couch furniture living room sofa](https://commons.wikimedia.org/wiki/File:Couch-furniture-living-room-sofa_(24300293356).jpg) (wikimedia) | CC0 |
+| `public/images/listings/demo22.jpg` | [Retro desk lamp](https://commons.wikimedia.org/wiki/File:Retro_desk_lamp.jpg) (wikimedia) | CC0 |
+| `public/images/listings/demo23.jpg` | [Armchair (MET DP106663)](https://commons.wikimedia.org/wiki/File:Armchair_MET_DP106663.jpg) (wikimedia) | CC0 |
+| `public/images/listings/demo24.jpg` | [Fish Oil Capsules](https://commons.wikimedia.org/wiki/File:Fish_Oil_Capsules.jpg) (wikimedia) | CC0 |
+| `public/images/listings/demo25.jpg` | [Vitamin C supplements](https://commons.wikimedia.org/wiki/File:Vitamin_C_supplements_1.jpg) (wikimedia) | CC0 |
+| `public/images/listings/demo26.jpg` | [Zinc pills](https://commons.wikimedia.org/wiki/File:Zinc_pills.jpg) (wikimedia) | CC0 |
+| `public/images/listings/demo27.jpg` | [Books on a Shelf](https://commons.wikimedia.org/wiki/File:Books_on_a_Shelf.JPG) (wikimedia) | CC0 |
+| `public/images/listings/demo28.jpg` | [Dortmund Opernhaus Ticket](https://commons.wikimedia.org/wiki/File:Dortmund_Opernhaus_Ticket_Nixon_in_China_20230310.jpg) (wikimedia) | CC0 |
+| `public/images/listings/demo29.jpg` | [Latte art 4](https://commons.wikimedia.org/wiki/File:Latte_art_4.jpg) (wikimedia) | CC0 |
