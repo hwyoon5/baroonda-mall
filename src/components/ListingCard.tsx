@@ -32,7 +32,7 @@ export default function ListingCard({ listing: l }: { listing: Listing }) {
         </div>
         <CardMeta listing={l} />
         <div className="mt-1">
-          <SellerInfo seller={l.seller} location={l.location} createdAt={l.createdAt} />
+          <SellerInfo seller={l.seller} location={l.condition === "used" ? l.location : undefined} createdAt={l.createdAt} />
         </div>
       </Link>
       <div className="pointer-events-none absolute inset-x-0 top-0 aspect-square">

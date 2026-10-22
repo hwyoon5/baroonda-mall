@@ -637,6 +637,15 @@ test("예시 상품: 운영자 계정 연결 후 실제와 같은 결제·상품
   assert.ok(!home.includes("실제 구매는 할 수 없어요"));
 });
 
+test("상품 카드: 새 상품은 판매자 동네 표기 없음, 개인 중고는 표시", async () => {
+  const tag = `동네${run}`;
+  await ok("/api/listings", { ...newBase, title: `${tag} 새`, stock: 1, location: "새상품동" }, seller);
+  await ok("/api/listings", { ...newBase, title: `${tag} 중고`, condition: "used", usageGrade: "A", location: "중고동" }, seller);
+  const html = await (await fetch(`${BASE}/search?q=${encodeURIComponent(tag)}`)).text();
+  assert.ok(html.includes(`${tag} 새`) && !html.includes("새상품동"), "새 상품 카드에는 동네 없음");
+  assert.ok(html.includes("중고동"), "중고 카드에는 동네 표시");
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");
