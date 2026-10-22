@@ -1,8 +1,14 @@
-import { MAX_POLICY_CHARS, digitsOnly, normalizeShipping, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, normalizeMailOrderNo, type SellerBusiness } from "@/lib/business";
+import { MAX_POLICY_CHARS, digitsOnly, normalizeShipping, isBizPhone, isPiWallet, isBizRegNo, isEmail, isMailOrderNo, normalizeMailOrderNo, type SellerBusiness } from "@/lib/business";
+import { isBlobUrl } from "@/lib/media";
 import { getBusiness } from "./db";
 import { HttpError } from "./http";
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/** 저장소(Blob) 미연결 환경에서는 화면에서 줄인 JPEG data URL로 받는다. */
+const MAX_DOC_DATA_CHARS = 600_000;
+const isDoc = (v: unknown): v is string =>
+  isBlobUrl(v, "doc") || (typeof v === "string" && /^data:image\/(jpeg|png|webp);base64,[\w+/=]+$/.test(v) && v.length <= MAX_DOC_DATA_CHARS);
 
 export function parseShipping(v: unknown) {
   const { terms, error } = normalizeShipping(v);
@@ -30,6 +36,10 @@ export function parseBusinessInput(b: Partial<Record<keyof SellerBusiness, unkno
   need(isBizPhone(phone), "고객센터 전화번호를 올바르게 입력해 주세요.");
   need(email === "" || isEmail(email), "이메일 형식이 올바르지 않아요.");
   const shipping = parseShipping(b.shipping);
+  need(isDoc(b.bizRegDoc), "사업자등록증 사본을 첨부해 주세요.");
+  need(mailOrderExempt || isDoc(b.mailOrderDoc), "통신판매업 신고증 사본을 첨부해 주세요.");
+  const piWallet = str(b.piWallet, 60).toUpperCase();
+  need(isPiWallet(piWallet), "Pi 지갑 주소가 올바르지 않아요. G로 시작하는 56자리 주소를 다시 확인해 주세요.");
   return {
     bizName,
     ownerName,
@@ -43,6 +53,9 @@ export function parseBusinessInput(b: Partial<Record<keyof SellerBusiness, unkno
     shippingInfo: str(b.shippingInfo, MAX_POLICY_CHARS) || undefined,
     legalNotice: str(b.legalNotice, MAX_POLICY_CHARS) || undefined,
     shipping,
+    bizRegDoc: b.bizRegDoc as string,
+    mailOrderDoc: mailOrderExempt ? undefined : (b.mailOrderDoc as string),
+    piWallet,
     updatedAt: new Date().toISOString(),
   };
 }
