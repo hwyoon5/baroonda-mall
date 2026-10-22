@@ -14,6 +14,9 @@
 | `public/images/categories/sports.jpg` | [Soccer Ball](https://stocksnap.io/photo/soccer-ball-1Q2U0J72YG) (stocksnap) | CC0 |
 | `public/images/categories/pet.jpg` | [Animals Puppy](https://stocksnap.io/photo/animals-puppy-OOH59BAHBL) (stocksnap) | CC0 |
 | `public/images/categories/all.jpg` | [People Girl](https://stocksnap.io/photo/people-girl-R33KBON2SV) (stocksnap) | CC0 |
+| `public/images/categories/interior.jpg` | [Lounge furniture, sofa, arm chairs](https://www.flickr.com/photos/71401718@N00/5510326235) (flickr) | CC0 |
+| `public/images/categories/health.jpg` | [Vitamin D pills](https://commons.wikimedia.org/w/index.php?curid=78180989) (wikimedia) | CC0 |
+| `public/images/categories/books.jpg` | [Books Stacked](https://stocksnap.io/photo/books-stacked-W5VAXXV2RP) (stocksnap) | CC0 |
 | `public/images/listings/demo1.jpg` | [Tangerines Clementines](https://stocksnap.io/photo/tangerines-clementines-WZEKJQF6AZ) (stocksnap) | CC0 |
 | `public/images/listings/demo2.jpg` | [Woman Headphones](https://stocksnap.io/photo/woman-headphones-NOLZXJLYKF) (stocksnap) | CC0 |
 | `public/images/listings/demo3.jpg` | [Raw steak fresh rosemary herbs](https://www.rawpixel.com/image/3286075/free-photo-image-steak-pineapple-food-bbq) (rawpixel) | CC0 |

@@ -627,6 +627,21 @@ test("예시 상품: 운영자 계정 연결 후 실제와 같은 결제·상품
   assert.ok(!home.includes("실제 구매는 할 수 없어요"));
 });
 
+test("카테고리 퀵 메뉴: 유아동→패션 통합, 디지털/가전, 신규 3종, 전체보기 삭제", async () => {
+  const home = await (await fetch(`${BASE}/`)).text();
+  const menu = home.slice(home.indexOf('aria-label="카테고리"'), home.indexOf("</section>", home.indexOf('aria-label="카테고리"'))).replaceAll("\u200b", "");
+  for (const name of ["패션", "디지털/가전", "인테리어/가구", "건강/영양제", "도서/티켓/서비스"]) assert.ok(menu.includes(name), name);
+  assert.ok(!menu.includes("유아동") && !menu.includes("전체보기"));
+  assert.equal((menu.match(/href="\/category\//g) ?? []).length, 10, "5열 × 2줄");
+  const { listing: kid } = await ok("/api/listings", { ...newBase, title: "아동 티셔츠", stock: 1, category: "baby" }, seller);
+  assert.equal(kid.category, "fashion", "예전 유아동은 패션으로 저장");
+  const { listing: book } = await ok("/api/listings", { ...newBase, title: "공연 티켓", stock: 1, category: "books" }, seller);
+  assert.ok((await ok("/api/listings?category=books")).listings.some((l) => l.id === book.id));
+  assert.ok((await (await fetch(`${BASE}/category/health`)).text()).includes("건강/영양제"));
+  const r = await fetch(`${BASE}/category/baby`, { redirect: "manual" });
+  assert.ok([307, 308].includes(r.status) && new URL(r.headers.get("location"), BASE).pathname === "/category/fashion");
+});
+
 test("상품 카드: 판매자 동네 표기 없음", async () => {
   const tag = `동네${run}`;
   await ok("/api/listings", { ...newBase, title: `${tag} 새`, stock: 1, location: "새상품동" }, seller);

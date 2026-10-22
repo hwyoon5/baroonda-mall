@@ -1,4 +1,4 @@
-import { listingCategories } from "./categories";
+import { listingCategories, normalizeCategory } from "./categories";
 import { discountRate } from "./format";
 import type { Listing, TradeMethod } from "./types";
 
@@ -56,7 +56,7 @@ export function parseSearch(p: Raw): SearchState {
     sort: SORTS.some((s) => s.id === sort) ? (sort as SortId) : "recent",
     min,
     max,
-    cat: listingCategories.some((c) => c.id === cat) ? cat : undefined,
+    cat: cat && listingCategories.some((c) => c.id === normalizeCategory(cat)) ? normalizeCategory(cat) : undefined,
     brands: [...new Set(get(p, "brand").split(",").map((b) => b.trim().slice(0, 30)).filter(Boolean))].slice(0, 10),
     trade: trade === "direct" || trade === "delivery" ? trade : undefined,
     fast: get(p, "fast") === "1",

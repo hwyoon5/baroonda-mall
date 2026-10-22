@@ -1,3 +1,4 @@
+import { normalizeCategory } from "@/lib/categories";
 import type { SellerBusiness } from "@/lib/business";
 import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
@@ -143,6 +144,7 @@ export async function claimDemoOwner(user: PiUser) {
 
 /** 예시 상품은 화면에 보이는 판매자 이름은 그대로 두고, 실제 소유(관리·정산)는 운영자 계정으로 돌린다. */
 function ownDemo(l: Listing, owner: PiUser | undefined): Listing {
+  if (normalizeCategory(l.category) !== l.category) l = { ...l, category: normalizeCategory(l.category) };
   return l.demo && owner && l.seller.uid !== owner.uid ? { ...l, seller: { uid: owner.uid, username: l.seller.username } } : l;
 }
 
