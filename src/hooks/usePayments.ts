@@ -21,7 +21,7 @@ export function usePayments() {
   const [isLoading, setIsLoading] = useState(false);
 
   const orderProduct = useCallback(
-    async (productId: string, option?: Record<string, string>): Promise<string | null> => {
+    async (productId: string, option?: Record<string, string>, extra?: { remoteArea?: boolean; pickup?: boolean }): Promise<string | null> => {
       if (!isAuthenticated) {
         requireAuth();
         return null;
@@ -29,7 +29,7 @@ export function usePayments() {
       setIsLoading(true);
       try {
         await ensurePiAuthenticated();
-        const { order, paymentData } = await api<{ order: Order; paymentData: PiPaymentData }>("/api/orders", { listingId: productId, option });
+        const { order, paymentData } = await api<{ order: Order; paymentData: PiPaymentData }>("/api/orders", { listingId: productId, option, ...extra });
 
         if (PI_MOCK) {
           const paymentId = `mock-${order.id}`;
