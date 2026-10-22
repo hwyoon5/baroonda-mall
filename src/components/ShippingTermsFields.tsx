@@ -5,9 +5,23 @@ import { COURIERS, MIN_REQUEST_DAYS, SHIPPING_FEE_FIELDS, SHIPPING_METHODS, norm
 const box = "w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pi focus:outline-none";
 
 /** 배송 방법·택배사·배송비·반품/교환 배송비·신청 기한 입력 (사업자 정보와 상품 등록에서 함께 사용) */
-export default function ShippingTermsFields({ idPrefix, value, onChange }: { idPrefix: string; value: ShippingDraft; onChange: (v: ShippingDraft) => void }) {
+const RETURN_KEYS: (keyof ShippingDraft)[] = ["returnFee", "exchangeFee", "requestDays"];
+
+/** part를 주면 배송(방법·택배사·배송비) 또는 반품·교환(배송비·신청 기한) 칸만 보여 준다. */
+export default function ShippingTermsFields({
+  idPrefix,
+  value,
+  onChange,
+  part,
+}: {
+  idPrefix: string;
+  value: ShippingDraft;
+  onChange: (v: ShippingDraft) => void;
+  part?: "shipping" | "return";
+}) {
   const set = (k: keyof ShippingDraft, v: string) => onChange({ ...value, [k]: v });
-  const error = normalizeShipping(value).error;
+  const shows = (k: keyof ShippingDraft) => !part || (part === "return") === RETURN_KEYS.includes(k);
+  const error = normalizeShipping(Object.fromEntries(Object.entries(value).filter(([k]) => shows(k as keyof ShippingDraft)))).error;
 
   const text = (k: "method" | "courier", label: string, list: string[], placeholder: string) => (
     <div>
@@ -56,15 +70,15 @@ export default function ShippingTermsFields({ idPrefix, value, onChange }: { idP
 
   return (
     <div className="space-y-3">
-      {text("method", "배송 방법", SHIPPING_METHODS, "직접 입력 (예: 화물 배송)")}
-      {text("courier", "택배사", COURIERS, "직접 입력")}
+      {shows("method") && text("method", "배송 방법", SHIPPING_METHODS, "직접 입력 (예: 화물 배송)")}
+      {shows("courier") && text("courier", "택배사", COURIERS, "직접 입력")}
       <div className="grid grid-cols-2 gap-2">
-        {SHIPPING_FEE_FIELDS.map(({ key, label }) => num(key, label, "π"))}
-        {num("requestDays", "반품·교환 신청 기한", "일", true)}
+        {SHIPPING_FEE_FIELDS.filter(({ key }) => shows(key)).map(({ key, label }) => num(key, label, "π"))}
+        {shows("requestDays") && num("requestDays", "반품·교환 신청 기한", "일", true)}
       </div>
-      <p className="text-[11px] leading-relaxed text-gray-400">
+      {part !== "shipping" && <p className="text-[11px] leading-relaxed text-gray-400">
         배송비를 0으로 쓰면 무료배송으로 표시돼요. 신청 기한은 전자상거래법상 최소 {MIN_REQUEST_DAYS}일이에요. 기본 배송비와 제주·도서산간 추가 배송비는 구매자 결제 금액에 함께 더해져요(무료배송 기준은 상품 금액으로 판단).
-      </p>
+      </p>}
       {error && <p className="text-[11px] text-red-500">{error}</p>}
     </div>
   );

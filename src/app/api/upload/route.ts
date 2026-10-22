@@ -1,6 +1,6 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { handle, HttpError, json, readJson, requireUser } from "@/lib/server/http";
-import { MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, PHOTO_TYPES, VIDEO_TYPES } from "@/lib/media";
+import { DOC_TYPES, MAX_DOC_BYTES, MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, PHOTO_TYPES, VIDEO_TYPES } from "@/lib/media";
 
 export const dynamic = "force-dynamic";
 
@@ -19,12 +19,13 @@ export const POST = handle(async (req) => {
     request: req,
     onBeforeGenerateToken: async (pathname) => {
       const user = requireUser(req);
-      const dir = /^listings\/(photo|video)\/[\w.-]{1,80}$/.exec(pathname)?.[1];
+      const m = /^(?:listings\/(photo|video)|business\/(doc))\/[\w.-]{1,80}$/.exec(pathname);
+      const dir = m?.[1] ?? m?.[2];
       if (!dir) throw new HttpError(400, "업로드 경로가 올바르지 않아요.");
-      const video = dir === "video";
+      const [types, max] = dir === "video" ? [VIDEO_TYPES, MAX_VIDEO_BYTES] : dir === "doc" ? [DOC_TYPES, MAX_DOC_BYTES] : [PHOTO_TYPES, MAX_PHOTO_BYTES];
       return {
-        allowedContentTypes: video ? VIDEO_TYPES : PHOTO_TYPES,
-        maximumSizeInBytes: video ? MAX_VIDEO_BYTES : MAX_PHOTO_BYTES,
+        allowedContentTypes: types,
+        maximumSizeInBytes: max,
         addRandomSuffix: true,
         tokenPayload: user.uid,
       };

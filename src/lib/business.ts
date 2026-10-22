@@ -16,6 +16,11 @@ export type SellerBusiness = {
   legalNotice?: string;
   /** 배송·반품 조건(배송 방법, 택배사, 배송비, 반품/교환 배송비, 신청 기한). 새 상품 등록 시 기본으로 연동된다. */
   shipping?: ShippingTerms;
+  /** 운영자 자격 검증용 서류 사본(Blob URL 또는 저장소 미연결 시 data URL). 공개 화면에는 표시하지 않는다. */
+  bizRegDoc?: string;
+  mailOrderDoc?: string;
+  /** 정산 받을 Pi 지갑 공개 주소(G…56자). 공개 화면에는 표시하지 않는다. */
+  piWallet?: string;
   updatedAt: string;
 };
 
@@ -155,3 +160,28 @@ export const normalizeMailOrderNo = (v: string) => v.replace(/\s+/g, "").replace
 export const isMailOrderNo = (v: string) => /^\d{4}-[가-힣A-Za-z]{2,12}-\d{3,6}$/.test(normalizeMailOrderNo(v));
 export const isBizPhone = (v: string) => /^0\d{1,2}-?\d{3,4}-?\d{4}$/.test(v.trim()) || /^1\d{3}-?\d{4}$/.test(v.trim());
 export const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+
+const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+/** Pi(Stellar) 지갑 공개 주소: G로 시작하는 56자 + 버전 바이트·CRC16 체크섬 확인으로 오타를 걸러낸다. */
+export function isPiWallet(v: string) {
+  if (!/^G[A-Z2-7]{55}$/.test(v)) return false;
+  const bytes: number[] = [];
+  let acc = 0;
+  let bits = 0;
+  for (const ch of v) {
+    acc = (acc << 5) | BASE32.indexOf(ch);
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes.push((acc >> bits) & 0xff);
+      acc &= (1 << bits) - 1;
+    }
+  }
+  if (bytes.length !== 35 || bytes[0] !== 6 << 3) return false;
+  let crc = 0;
+  for (const b of bytes.slice(0, 33)) {
+    crc ^= b << 8;
+    for (let i = 0; i < 8; i++) crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+  }
+  return crc === (bytes[33] | (bytes[34] << 8));
+}
