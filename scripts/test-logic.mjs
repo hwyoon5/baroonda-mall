@@ -43,7 +43,9 @@ const buy = async (token, listingId, option) => {
   await ok("/api/payments/complete", { paymentId: `p-${order.id}`, txid: `tx-${order.id}` }, token);
   return order;
 };
-const biz = { bizName: "바로상점", ownerName: "홍길동", bizRegNo: "123-45-67891", mailOrderNo: "제 2024-서울강남-01234 호", address: "서울시 강남구 테헤란로 1", phone: "02-123-4567" };
+const DOC = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+const WALLET = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
+const biz = { bizName: "바로상점", ownerName: "홍길동", bizRegNo: "123-45-67891", mailOrderNo: "제 2024-서울강남-01234 호", address: "서울시 강남구 테헤란로 1", phone: "02-123-4567", bizRegDoc: DOC, mailOrderDoc: DOC, piWallet: WALLET };
 const newBase = { category: "fashion", pricePi: 1, tradeMethods: ["delivery"], images: [], condition: "new" };
 
 const tests = [];
@@ -512,6 +514,23 @@ test("검색 필터·정렬: 가격대·판매 유형·브랜드·빠른배송·
   assert.ok(h.includes("검색 결과 2개") && h.includes("낮은 가격순") && h.indexOf(`${tag} B`) < h.indexOf(`${tag} A`) && !h.includes(`${tag} C`));
   const hb = await (await fetch(`${BASE}/search?brand=Apple`)).text();
   assert.ok(hb.includes("필터 결과 1개") && hb.includes("아이패드"), "검색어 없이 브랜드만으로 결과");
+});
+
+test("사업자 서류 사본·Pi 지갑 주소: 필수·형식·체크섬 검증, 면제 시 신고증 생략, 공개 화면 비노출", async () => {
+  const s = await signin("bizdoc");
+  const blobDoc = "https://abc123.public.blob.vercel-storage.com/business/doc/x-AbC123.pdf";
+  const typo = WALLET.slice(0, -1) + (WALLET.endsWith("A") ? "B" : "A");
+  for (const bad of [{ bizRegDoc: "" }, { bizRegDoc: "https://evil.example.com/business/doc/a.jpg" }, { bizRegDoc: "https://abc123.public.blob.vercel-storage.com/listings/photo/a.jpg" }, { bizRegDoc: "data:text/html;base64,AAAA" }, { mailOrderDoc: undefined }, { piWallet: "" }, { piWallet: typo }, { piWallet: "0x52908400098527886E0F7030069857D2E4169EE7" }, { piWallet: "S" + WALLET.slice(1) }]) {
+    assert.equal((await call("/api/me/business", { ...biz, ...bad }, s, "PUT")).status, 400, JSON.stringify(bad));
+  }
+  const { business: b } = await ok("/api/me/business", { ...biz, bizRegDoc: blobDoc, piWallet: WALLET.toLowerCase() }, s, "PUT");
+  assert.deepEqual([b.bizRegDoc, b.mailOrderDoc, b.piWallet], [blobDoc, DOC, WALLET]);
+  const exempt = (await ok("/api/me/business", { ...biz, mailOrderExempt: true, mailOrderNo: "", mailOrderDoc: undefined }, s, "PUT")).business;
+  assert.equal(exempt.mailOrderDoc, undefined, "면제 대상은 신고증 사본 불필요");
+  assert.equal((await ok("/api/me/business", undefined, s)).business.piWallet, WALLET);
+  const { listing } = await ok("/api/listings", { ...newBase, title: "서류 비공개", stock: 1 }, s);
+  const html = await (await fetch(`${BASE}/listings/${listing.id}`)).text();
+  assert.ok(html.includes("판매자 정보") && !html.includes(WALLET) && !html.includes(DOC), "지갑 주소·서류는 공개 화면에 없음");
 });
 
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {

@@ -7,7 +7,7 @@ import FilePicker from "@/components/FilePicker";
 import ShippingTable from "@/components/ShippingTable";
 import ShippingTermsFields from "@/components/ShippingTermsFields";
 import { api } from "@/lib/client/api";
-import { uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
+import { resizeImage, uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
 import { MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, hasPolicy, hasShipping, pickPolicy, toShippingDraft, type SellerBusiness, type SellerPolicy } from "@/lib/business";
 import { listingCategories } from "@/lib/categories";
 import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
@@ -29,27 +29,6 @@ const saleKinds = [
   { v: "new", t: "새 상품(정식 판매)", d: "재고·옵션이 있는 새 상품" },
   { v: "used", t: "개인 중고", d: "내가 쓰던 물건 1개" },
 ] as const;
-
-/** 긴 변 maxSide px로 줄인 캔버스. */
-async function resizeImage(file: File, maxSide: number): Promise<HTMLCanvasElement> {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = reject;
-      el.src = url;
-    });
-    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(img.width * scale);
-    canvas.height = Math.round(img.height * scale);
-    canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 
 /** Blob 저장소가 있으면 1280px JPEG로 업로드해 URL을, 없으면 720px data URL을 만든다. */
 async function preparePhoto(file: File, blob: boolean): Promise<string> {
