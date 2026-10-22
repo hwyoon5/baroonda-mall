@@ -6,7 +6,6 @@ import FastDeliveryTag from "@/components/FastDeliveryTag";
 import ListingThumb from "@/components/ListingThumb";
 import SellerInfo from "@/components/SellerInfo";
 import SubHeader from "@/components/SubHeader";
-import TradeArea from "@/components/TradeArea";
 import TradeMethodTag from "@/components/TradeMethodTag";
 import ViewTracker from "@/components/ViewTracker";
 import { findCategory } from "@/lib/categories";
@@ -98,7 +97,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             <TradeMethodTag key={m} method={m} />
           ))}
         </div>
-        {listing.condition === "used" && <TradeArea location={listing.location} className="mt-2 text-sm" />}
       </section>
 
       <section className="mt-2 space-y-2 bg-white px-4 py-4 text-sm">
@@ -110,10 +108,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         )}
         {listing.condition === "used" ? (
           <>
-            <p>
-              <span className="inline-block w-20 text-gray-500">거래 지역</span>
-              {listing.location || <span className="text-gray-400">지역 정보 없음</span>}
-            </p>
             {listing.usageGrade && (
               <p>
                 <span className="inline-block w-20 text-gray-500">사용감</span>

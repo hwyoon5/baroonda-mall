@@ -134,29 +134,34 @@ test("옵션 확장: 최대 5개 그룹·100개 조합, 초과 시 400", async (
 
 test("임시저장: 비공개, 이어서 작성 후 게시", async () => {
   const title = `임시저장 ${run}`;
-  const { listing: d } = await ok("/api/listings", { title, draft: true, condition: "used" }, seller);
+  const { listing: d } = await ok("/api/listings", { title, draft: true, condition: "new" }, seller);
   assert.equal(d.status, "draft");
   assert.equal((await ok(`/api/listings?q=${encodeURIComponent(title)}`)).listings.length, 0);
   assert.equal((await call(`/api/listings/${d.id}`)).status, 401);
   assert.equal((await call(`/api/listings/${d.id}`, undefined, b1)).status, 404);
   assert.equal((await fetch(`${BASE}/listings/${d.id}`)).status, 404);
   assert.equal((await call(`/api/listings/${d.id}`, { title, condition: "used" }, seller, "PUT")).status, 400);
-  const { listing: pub } = await ok(`/api/listings/${d.id}`, { ...newBase, title, condition: "used", usageGrade: "A", category: "digital" }, seller, "PUT");
+  const { listing: pub } = await ok(`/api/listings/${d.id}`, { ...newBase, title, stock: 1 }, seller, "PUT");
   assert.equal(pub.status, "selling");
   assert.equal((await ok(`/api/listings?q=${encodeURIComponent(title)}`)).listings.length, 1);
 });
 
-test("개인 중고: 예약 → 발송(송장 검증) → 구매 확정 → 거래완료", async () => {
-  const { listing: l } = await ok("/api/listings", { ...newBase, title: "중고 카메라", condition: "used", usageGrade: "B", category: "digital" }, seller);
-  const order = await buy(b1, l.id);
-  assert.equal((await listing(l.id)).status, "reserved");
-  assert.equal((await call(`/api/orders/${order.id}`, { action: "ship", method: "delivery", carrier: "CJ대한통운", trackingNumber: "1".repeat(21) }, seller)).status, 400);
-  assert.equal((await call(`/api/orders/${order.id}`, { action: "ship", method: "delivery", carrier: "없는택배", trackingNumber: "123456789" }, seller)).status, 400);
-  assert.equal((await call(`/api/orders/${order.id}`, { action: "ship", method: "delivery", carrier: "CJ대한통운", trackingNumber: "123456789" }, b1)).status, 403);
-  const shipped = (await ok(`/api/orders/${order.id}`, { action: "ship", method: "delivery", carrier: "CJ대한통운", trackingNumber: "6012-3456-7890" }, seller)).order;
-  assert.equal(shipped.fulfillment.trackingNumber, "6012-3456-7890");
-  await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1);
-  assert.equal((await listing(l.id)).status, "sold");
+test("개인 중고 영역 삭제: 등록·임시저장 차단, 메인·카테고리·검색에서 제외, /category/used는 메인으로", async () => {
+  const used = { ...newBase, title: "중고 카메라", condition: "used", usageGrade: "B", category: "digital" };
+  assert.equal((await call("/api/listings", used, seller)).status, 400);
+  assert.equal((await call("/api/listings", { title: "중고 임시", draft: true, condition: "used" }, seller)).status, 400);
+  const usedDemo = "아이패드 에어 5세대";
+  assert.equal((await ok(`/api/listings?q=${encodeURIComponent(usedDemo)}`)).listings.length, 0, "예시 중고도 숨김");
+  assert.ok((await ok("/api/listings?includeSold=1")).listings.every((l) => l.condition === "new"));
+  assert.equal((await call("/api/listings/demo6")).status, 404);
+  const home = await (await fetch(`${BASE}/`)).text();
+  assert.ok(!home.includes(usedDemo) && !home.includes("중고마켓") && !home.includes("/category/used"), "메인에 중고 없음");
+  const cats = await (await fetch(`${BASE}/categories`)).text();
+  assert.ok(!cats.includes("중고마켓"), "카테고리 목록에 중고마켓 없음");
+  const digital = await (await fetch(`${BASE}/category/digital`)).text();
+  assert.ok(!digital.includes(usedDemo) && !digital.includes("닌텐도"), "카테고리에 중고 없음");
+  const r = await fetch(`${BASE}/category/used`, { redirect: "manual" });
+  assert.ok([307, 308].includes(r.status) && new URL(r.headers.get("location"), BASE).pathname === "/", "중고마켓 주소는 메인으로");
 });
 
 test("판매 중지: 공개 목록에서 숨김, 구매 불가, 재개 시 복구", async () => {
@@ -235,8 +240,6 @@ test("거래 후기: 구매 확정한 구매자만 1회, 판매자 프로필 평
   assert.equal(p.reviews[0].buyer.uid !== uid, true);
   assert.equal((await call("/api/sellers/nobody-xyz")).status, 404);
   assert.equal((await fetch(`${BASE}/sellers/${encodeURIComponent(uid)}`)).status, 200, "프로필 페이지");
-  const used = await (await fetch(`${BASE}/category/used`)).text();
-  assert.ok(used.includes("h-24 w-24"), "중고 카테고리는 리스트형");
 });
 
 let failed = 0;
@@ -281,17 +284,17 @@ test("정산 실패 → 주문은 구매 확정 유지, 판매자 재시도로 �
   assert.equal(o.payoutTransfer.error, undefined);
 });
 
-test("환불: 발송 전 취소는 즉시 환불, 중고 예약 해제", async () => {
-  const { listing: l } = await ok("/api/listings", { ...newBase, title: "중고 환불", condition: "used", usageGrade: "A", category: "digital" }, seller);
+test("환불: 발송 전 취소는 즉시 환불, 재고 복구", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "발송 전 환불", stock: 1 }, seller);
   const order = await buy(b1, l.id);
-  assert.equal((await listing(l.id)).status, "reserved");
+  assert.equal((await listing(l.id)).stock, 0);
   assert.equal((await act(order.id, "refund_request", b1)).status, 400);
   assert.equal((await act(order.id, "refund_request", seller, { reason: "x" })).status, 403);
   const o = (await ok(`/api/orders/${order.id}`, { action: "refund_request", reason: "단순 변심" }, b1)).order;
   assert.equal(o.status, "refunded");
   assert.equal(o.refund.status, "refunded");
   assert.equal(o.refund.transfer.amount, o.amount);
-  assert.equal((await listing(l.id)).status, "selling");
+  assert.equal((await listing(l.id)).stock, 1);
   assert.equal((await act(order.id, "confirm", b1)).status, 409);
   assert.equal((await act(order.id, "ship", seller, { method: "direct" })).status, 409);
 });
@@ -349,11 +352,9 @@ test("사진 최대 10장·동영상 최대 2개: 개수·형식 검증, 상세 
   assert.equal((await call("/api/upload", { type: "blob.generate-client-token", payload: { pathname: "listings/photo/a.jpg" } }, seller)).status, 503);
 });
 
-test("사업자 정보: 검증, 새 상품만 필수(개인 중고·임시저장은 제외), 상세에 판매자 정보 표시", async () => {
+test("사업자 정보: 검증, 게시에 필수(임시저장은 제외), 상세에 판매자 정보 표시", async () => {
   const s = await signin("biz");
   assert.deepEqual(await ok("/api/me/business", undefined, s), { business: null });
-  const usedBody = { ...newBase, condition: "used", usageGrade: "A", title: "중고" };
-  await ok("/api/listings", usedBody, s);
   assert.equal((await call("/api/listings", { ...newBase, title: "새 상품", stock: 3 }, s)).status, 403);
   const { listing: d } = await ok("/api/listings", { ...newBase, title: "새 상품 임시", stock: 3, draft: true }, s);
   assert.equal((await call(`/api/listings/${d.id}`, { ...newBase, title: "새 상품 임시", stock: 3 }, s, "PUT")).status, 403);
@@ -372,7 +373,7 @@ test("사업자 정보: 검증, 새 상품만 필수(개인 중고·임시저장
   assert.equal((await call("/api/me/business")).status, 401);
 });
 
-test("반품·환불·법적 고지: 사업자 정보에 저장 → 새 상품 상세 자동 표시, 상품별 직접 작성, 개인 중고 제외", async () => {
+test("반품·환불·법적 고지: 사업자 정보에 저장 → 새 상품 상세 자동 표시, 상품별 직접 작성", async () => {
   const s = await signin("policy");
   const pol = { returnPolicy: "수령 후 7일 이내 반품 가능", shippingInfo: "결제 후 2일 내 발송", legalNotice: "분쟁은 소비자분쟁해결기준에 따름" };
   const { business } = await ok("/api/me/business", { ...biz, ...pol, legalNotice: "  " + pol.legalNotice + "  " }, s, "PUT");
@@ -396,9 +397,6 @@ test("반품·환불·법적 고지: 사업자 정보에 저장 → 새 상품 �
 
   const { listing: blank } = await ok("/api/listings", { ...newBase, title: "빈 고지", stock: 1, policy: { returnPolicy: " " } }, s);
   assert.equal(blank.policy, undefined, "모두 비우면 기본 규정 사용");
-  const { listing: used } = await ok("/api/listings", { ...newBase, condition: "used", usageGrade: "A", title: "중고 고지", policy: pol }, s);
-  assert.equal(used.policy, undefined);
-  assert.ok(!(await html(used.id)).includes("반품·환불 규정"), "개인 중고는 표시 안 함");
 });
 
 test("배송·반품 조건: 사업자 정보 저장·검증 → 새 상품 자동 연동, 상품별 수정", async () => {
@@ -428,9 +426,6 @@ test("배송·반품 조건: 사업자 정보 저장·검증 → 새 상품 자�
   h = await html(custom.id);
   assert.ok(h.includes("우체국택배") && h.includes("무료") && h.includes("14일 이내") && !h.includes("한진택배"), "상품별 배송 조건 우선");
   assert.equal((await call("/api/listings", { ...newBase, title: "배송 오류", stock: 1, policy: { shipping: { requestDays: "5" } } }, s)).status, 400);
-  const { listing: used } = await ok("/api/listings", { ...newBase, condition: "used", usageGrade: "A", title: "중고 배송", policy: { shipping: ship } }, s);
-  assert.equal(used.policy, undefined);
-  assert.ok(!(await html(used.id)).includes("배송·반품 조건"), "개인 중고는 표시 안 함");
 });
 
 test("쇼츠: 등록·내 상품 연결·숨김·삭제·권한, 피드/관리 화면", async () => {
@@ -498,8 +493,6 @@ test("배송비 결제: 기본·무료배송 기준·제주·도서산간·상�
   r = await order(both.id, { pickup: true });
   assert.deepEqual([r.paymentData.amount, r.order.pickup], [10, true]);
   assert.equal((await call("/api/orders", { listingId: l.id, pickup: true }, b2)).status, 400, "택배 전용 상품은 직거래 불가");
-  const used = await mk("중고 배송비 없음", { pricePi: 10, condition: "used", usageGrade: "A", category: "digital" });
-  assert.equal((await order(used.id)).paymentData.amount, 10);
 
   const paid = await buy(b2, l.id);
   assert.equal(paid.amount, 13);
@@ -514,7 +507,7 @@ test("검색 필터·정렬: 가격대·판매 유형·브랜드·빠른배송·
   const a = await mk("A", { pricePi: 5, brand: " Nike ", fastShipping: true });
   await mk("B", { pricePi: 1, brand: "nike", originalPricePi: 4 });
   const c = await mk("C", { pricePi: 12, brand: "Adidas", originalPricePi: 15 });
-  const d = await mk("D", { pricePi: 3, condition: "used", usageGrade: "A", category: "digital" });
+  const d = await mk("D", { pricePi: 3, stock: 1, category: "digital" });
   assert.equal(a.brand, "Nike");
   const names = async (qs) => (await ok(`/api/listings?q=${tag}&${qs}`)).listings.map((l) => l.title.split(" ")[1]).join("");
   assert.equal(await names("sort=priceAsc"), "BDAC");
@@ -523,7 +516,6 @@ test("검색 필터·정렬: 가격대·판매 유형·브랜드·빠른배송·
   assert.equal(await names("sort=brand"), "CABD", "브랜드 가나다, 브랜드 없는 상품은 뒤로");
   assert.equal(await names("min=2&max=6&sort=priceAsc"), "DA");
   assert.equal(await names("min=6&max=2&sort=priceAsc"), "DA", "최소·최대가 뒤바뀌어도 처리");
-  assert.equal(await names("kind=used"), "D");
   assert.equal(await names("brand=NIKE&sort=priceAsc"), "BA", "브랜드는 대소문자 무시");
   assert.equal(await names("brand=Nike,Adidas&sort=priceAsc"), "BAC");
   assert.equal(await names("fast=1"), "A");
@@ -531,7 +523,7 @@ test("검색 필터·정렬: 가격대·판매 유형·브랜드·빠른배송·
   assert.equal(await names("sort=bogus&min=abc"), await names(""), "잘못된 값은 무시");
   assert.ok((await ok("/api/listings?q=adidas")).listings.some((l) => l.id === c.id), "브랜드명으로 검색");
 
-  const pop = (await ok("/api/listings?sort=popular&kind=new")).listings.map((l) => l.soldCount ?? 0);
+  const pop = (await ok("/api/listings?sort=popular")).listings.map((l) => l.soldCount ?? 0);
   assert.ok(pop.length > 3 && pop.every((v, i) => i === 0 || pop[i - 1] >= v), "인기순 = 판매량 내림차순");
 
   await buy(b1, d.id);
@@ -540,11 +532,11 @@ test("검색 필터·정렬: 가격대·판매 유형·브랜드·빠른배송·
 
   const h = await (await fetch(`${BASE}/search?q=${tag}&sort=priceAsc&brand=Nike`)).text();
   assert.ok(h.includes("검색 결과 2개") && h.includes("낮은 가격순") && h.indexOf(`${tag} B`) < h.indexOf(`${tag} A`) && !h.includes(`${tag} C`));
-  const hb = await (await fetch(`${BASE}/search?brand=Apple`)).text();
-  assert.ok(hb.includes("필터 결과 1개") && hb.includes("아이패드"), "검색어 없이 브랜드만으로 결과");
+  const hb = await (await fetch(`${BASE}/search?brand=Anker`)).text();
+  assert.ok(hb.includes("필터 결과 1개") && hb.includes("고속 충전기"), "검색어 없이 브랜드만으로 결과");
 });
 
-test("오늘의 특가 노출 선택(정가 필수, 새 상품만)·개인 중고 거래 지역 필수", async () => {
+test("오늘의 특가 노출 선택(정가 필수)", async () => {
   const mk = (title, extra) => ok("/api/listings", { ...newBase, title, stock: 3, ...extra }, seller).then((r) => r.listing);
   const deal = await mk("특가 선택", { pricePi: 1, originalPricePi: 2, todayDeal: true });
   const off = await mk("할인만", { pricePi: 1, originalPricePi: 2 });
@@ -557,12 +549,6 @@ test("오늘의 특가 노출 선택(정가 필수, 새 상품만)·개인 중�
   const dealSection = home.slice(home.indexOf('id="today-deals"'), home.indexOf("</section>", home.indexOf('id="today-deals"')));
   assert.ok(dealSection.includes("특가 선택") && !dealSection.includes("할인만"), "메인 오늘의 특가 연동");
 
-  const used = { ...newBase, condition: "used", usageGrade: "A", category: "digital" };
-  assert.equal((await call("/api/listings", { ...used, title: "지역 없음", location: " " }, seller)).status, 400);
-  const u = (await ok("/api/listings", { ...used, title: "망원동 중고", location: "망원동", originalPricePi: 5, todayDeal: true }, seller)).listing;
-  assert.deepEqual([u.location, u.todayDeal], ["망원동", undefined], "중고는 특가 노출 대상 아님");
-  assert.ok((await (await fetch(`${BASE}/listings/${u.id}`)).text()).includes("망원동"));
-  await ok("/api/listings", { title: "지역 없는 임시저장", draft: true, condition: "used" }, seller);
 });
 
 test("사업자 서류 사본·Pi 지갑 주소: 필수·형식·체크섬 검증, 면제 시 신고증 생략, 공개 화면 비노출", async () => {
@@ -606,23 +592,6 @@ test("상품 카드: 배송 조건·구경한 사람 수·별점·구매 건수 
   assert.ok(home.includes("무료배송") && home.includes("구매 "), "메인 카드에도 표시");
 });
 
-test("메인 최근 상품은 개인 중고 제외, 중고마켓 세부 카테고리(?sub=)", async () => {
-  const tag = `분류${Date.now().toString(36)}`;
-  await ok("/api/listings", { ...newBase, title: `${tag} 중고폰`, condition: "used", usageGrade: "A", category: "digital" }, seller);
-  await ok("/api/listings", { ...newBase, title: `${tag} 새옷`, stock: 1 }, seller);
-  const home = await (await fetch(`${BASE}/`)).text();
-  assert.ok(home.includes(`${tag} 새옷`), "새 상품은 메인 노출");
-  assert.ok(!home.includes(`${tag} 중고폰`), "중고는 메인 '방금 올라온 상품'에서 제외");
-  const all = await (await fetch(`${BASE}/category/used`)).text();
-  assert.ok(all.includes("중고 세부 카테고리") && all.includes(`${tag} 중고폰`) && !all.includes(`${tag} 새옷`));
-  const digital = await (await fetch(`${BASE}/category/used?sub=digital`)).text();
-  assert.ok(digital.includes(`${tag} 중고폰`) && digital.includes('aria-current="page"'));
-  const fashion = await (await fetch(`${BASE}/category/used?sub=fashion`)).text();
-  assert.ok(!fashion.includes(`${tag} 중고폰`), "다른 세부 분류에는 안 나옴");
-  const bogus = await (await fetch(`${BASE}/category/used?sub=nope`)).text();
-  assert.ok(bogus.includes(`${tag} 중고폰`), "모르는 분류는 전체로");
-});
-
 test("예시 상품: 운영자 계정 연결 후 실제와 같은 결제·상품등록 내역·판매 내역", async () => {
   const before = await listing("demo2");
   if (server) {
@@ -633,7 +602,7 @@ test("예시 상품: 운영자 계정 연결 후 실제와 같은 결제·상품
   const owner = (await ok("/api/user/signin", { authResult: { accessToken: "mock:demoowner", user: { uid: "mock-demoowner", username: "demoowner" } } })).token;
   assert.equal((await ok("/api/health")).demoSeller.connected, true);
   const mine = (await ok("/api/listings?seller=me", undefined, owner)).listings;
-  assert.ok(mine.filter((l) => l.demo).length >= 20, "상품등록 내역에 예시 상품 전부");
+  assert.ok(mine.filter((l) => l.demo).length >= 14, "상품등록 내역에 예시 새 상품 전부");
   const cur = await listing("demo2");
   assert.equal(cur.seller.uid, "mock-demoowner");
   assert.equal(cur.seller.username, before.seller.username, "화면의 판매자 이름은 그대로");
@@ -658,15 +627,11 @@ test("예시 상품: 운영자 계정 연결 후 실제와 같은 결제·상품
   assert.ok(!home.includes("실제 구매는 할 수 없어요"));
 });
 
-test("상품 카드: 새 상품·개인 중고 모두 판매자 동네 표기 없음", async () => {
+test("상품 카드: 판매자 동네 표기 없음", async () => {
   const tag = `동네${run}`;
   await ok("/api/listings", { ...newBase, title: `${tag} 새`, stock: 1, location: "새상품동" }, seller);
-  await ok("/api/listings", { ...newBase, title: `${tag} 중고`, condition: "used", usageGrade: "A", location: "중고동" }, seller);
   const html = await (await fetch(`${BASE}/search?q=${encodeURIComponent(tag)}`)).text();
   assert.ok(html.includes(`${tag} 새`) && !html.includes("새상품동"), "새 상품 카드에는 동네 없음");
-  assert.ok(html.includes(`${tag} 중고`) && !html.includes("중고동"), "중고 카드에도 동네 없음");
-  const used = await (await fetch(`${BASE}/category/used`)).text();
-  assert.ok(!used.includes("중고동"), "중고마켓 목록에도 동네 없음");
 });
 
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {

@@ -52,7 +52,8 @@ let cache: Listing[] | null = null;
 export function demoListings(): Listing[] {
   if (cache) return cache;
   const base = Date.UTC(2026, 9, 19, 9, 0, 0);
-  cache = seeds.map((s, i) => {
+  // 개인 중고(used) 예시는 노출하지 않는다. id(demoN)·이미지가 순번 기준이라 seeds에서는 지우지 않는다.
+  cache = seeds.map((s, i): Listing => {
     const seller = sellers[s.seller];
     return {
       id: `demo${i + 1}`,
@@ -87,6 +88,6 @@ export function demoListings(): Listing[] {
       createdAt: new Date(base - i * 47 * 60000).toISOString(),
       demo: true,
     };
-  });
+  }).filter((l) => l.condition === "new");
   return cache;
 }

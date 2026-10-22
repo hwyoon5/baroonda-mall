@@ -121,6 +121,8 @@ export type ListingFilter = {
   dealsOnly?: boolean;
   includeSold?: boolean;
   includeDrafts?: boolean;
+  /** 개인 중고는 판매하지 않는다. 예전에 올라온 중고는 판매자 본인 관리 화면에서만 보인다. */
+  includeUsed?: boolean;
 };
 
 /** 예시 상품을 맡아 관리하는 운영자 Pi 계정(DEMO_SELLER_USERNAME). 그 계정으로 로그인하면 기록된다. */
@@ -158,8 +160,8 @@ export async function listListings(f: ListingFilter = {}): Promise<Listing[]> {
   let all = [...byId.values()].map((l) => ownDemo(l, owner));
   if (f.ids) all = all.filter((l) => f.ids!.includes(l.id));
   if (f.sellerUid) all = all.filter((l) => l.seller.uid === f.sellerUid);
-  if (f.category === "used") all = all.filter((l) => l.condition === "used");
-  else if (f.category) all = all.filter((l) => l.category === f.category);
+  if (!f.includeUsed) all = all.filter((l) => l.condition === "new");
+  if (f.category) all = all.filter((l) => l.category === f.category);
   if (f.dealsOnly) all = all.filter((l) => l.todayDeal && l.originalPricePi && l.originalPricePi > l.pricePi && l.status === "selling");
   if (f.q) {
     const q = f.q.toLowerCase();

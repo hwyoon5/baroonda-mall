@@ -20,13 +20,8 @@ export default function SearchControls({ state, facets }: { state: SearchState; 
     router.push(qs ? `/search?${qs}` : "/search", { scroll: false });
   };
   const n = activeFilterCount(state);
-  const toggle = <K extends "kind" | "trade">(k: K, v: SearchState[K]) => ({ [k]: state[k] === v ? undefined : v });
   const quick: { label: string; on: boolean; patch: Partial<SearchState> }[] = [
-    { label: "새 상품", on: state.kind === "new", patch: toggle("kind", "new") },
-    { label: "개인 중고", on: state.kind === "used", patch: toggle("kind", "used") },
     { label: "빠른배송", on: state.fast, patch: { fast: !state.fast } },
-    { label: "택배", on: state.trade === "delivery", patch: toggle("trade", "delivery") },
-    { label: "직거래", on: state.trade === "direct", patch: toggle("trade", "direct") },
     { label: "구매 가능만", on: state.avail, patch: { avail: !state.avail } },
   ];
   const applied: { label: string; patch: Partial<SearchState> }[] = [
