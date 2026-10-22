@@ -11,7 +11,7 @@ if (!BASE) {
   BASE = `http://localhost:${PORT}`;
   const busy = await fetch(BASE).then(() => true, () => false);
   if (busy) throw new Error(`포트 ${PORT}이 이미 사용 중이에요(이전 서버가 남아 있을 수 있어요). 종료 후 다시 실행해 주세요.`);
-  server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, PI_MOCK: "1", NEXT_PUBLIC_PI_MOCK: "1" }, stdio: "ignore", detached: true });
+  server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, PI_MOCK: "1", NEXT_PUBLIC_PI_MOCK: "1", DEMO_SELLER_USERNAME: "demoowner" }, stdio: "ignore", detached: true });
   for (let i = 0; ; i++) {
     try {
       if ((await fetch(BASE)).ok) break;
@@ -170,8 +170,7 @@ test("판매 중지: 공개 목록에서 숨김, 구매 불가, 재개 시 복�
   assert.equal((await ok(`/api/listings?q=${encodeURIComponent(title)}`)).listings.length, 1);
 });
 
-test("예시 상품·본인 상품은 구매 불가", async () => {
-  assert.equal((await call("/api/orders", { listingId: "demo1" }, b1)).status, 400);
+test("본인 상품은 구매 불가", async () => {
   const { listing: l } = await ok("/api/listings", { ...newBase, title: "내 상품", stock: 1 }, seller);
   assert.equal((await call("/api/orders", { listingId: l.id }, seller)).status, 400);
 });
@@ -179,7 +178,6 @@ test("예시 상품·본인 상품은 구매 불가", async () => {
 test("1:1 채팅: 방 생성(중복 없음)·메시지·안 읽음·권한", async () => {
   const { listing: l } = await ok("/api/listings", { ...newBase, title: "채팅 상품", stock: 1 }, seller);
   assert.equal((await call("/api/chats", { listingId: l.id }, seller)).status, 400, "self chat");
-  assert.equal((await call("/api/chats", { listingId: "demo1" }, b1)).status, 400, "demo chat");
   const { room } = await ok("/api/chats", { listingId: l.id }, b1);
   assert.equal((await ok("/api/chats", { listingId: l.id }, b1)).room.id, room.id);
   assert.equal((await call("/api/chats", { listingId: l.id }, b2)).data.room.id === room.id, false);
@@ -531,6 +529,58 @@ test("사업자 서류 사본·Pi 지갑 주소: 필수·형식·체크섬 검�
   const { listing } = await ok("/api/listings", { ...newBase, title: "서류 비공개", stock: 1 }, s);
   const html = await (await fetch(`${BASE}/listings/${listing.id}`)).text();
   assert.ok(html.includes("판매자 정보") && !html.includes(WALLET) && !html.includes(DOC), "지갑 주소·서류는 공개 화면에 없음");
+});
+
+test("메인 최근 상품은 개인 중고 제외, 중고마켓 세부 카테고리(?sub=)", async () => {
+  const tag = `분류${Date.now().toString(36)}`;
+  await ok("/api/listings", { ...newBase, title: `${tag} 중고폰`, condition: "used", usageGrade: "A", category: "digital" }, seller);
+  await ok("/api/listings", { ...newBase, title: `${tag} 새옷`, stock: 1 }, seller);
+  const home = await (await fetch(`${BASE}/`)).text();
+  assert.ok(home.includes(`${tag} 새옷`), "새 상품은 메인 노출");
+  assert.ok(!home.includes(`${tag} 중고폰`), "중고는 메인 '방금 올라온 상품'에서 제외");
+  const all = await (await fetch(`${BASE}/category/used`)).text();
+  assert.ok(all.includes("중고 세부 카테고리") && all.includes(`${tag} 중고폰`) && !all.includes(`${tag} 새옷`));
+  const digital = await (await fetch(`${BASE}/category/used?sub=digital`)).text();
+  assert.ok(digital.includes(`${tag} 중고폰`) && digital.includes('aria-current="page"'));
+  const fashion = await (await fetch(`${BASE}/category/used?sub=fashion`)).text();
+  assert.ok(!fashion.includes(`${tag} 중고폰`), "다른 세부 분류에는 안 나옴");
+  const bogus = await (await fetch(`${BASE}/category/used?sub=nope`)).text();
+  assert.ok(bogus.includes(`${tag} 중고폰`), "모르는 분류는 전체로");
+});
+
+test("예시 상품: 운영자 계정 연결 후 실제와 같은 결제·상품등록 내역·판매 내역", async () => {
+  const before = await listing("demo2");
+  if (server) {
+    assert.equal((await call("/api/orders", { listingId: "demo2" }, b1)).status, 503, "운영자 미연결이면 결제 시작 전 안내");
+    assert.equal((await call("/api/chats", { listingId: "demo2" }, b1)).status, 503, "운영자 미연결이면 채팅 안내");
+    assert.equal((await ok("/api/health")).demoSeller.connected, false);
+  }
+  const owner = (await ok("/api/user/signin", { authResult: { accessToken: "mock:demoowner", user: { uid: "mock-demoowner", username: "demoowner" } } })).token;
+  assert.equal((await ok("/api/health")).demoSeller.connected, true);
+  const mine = (await ok("/api/listings?seller=me", undefined, owner)).listings;
+  assert.ok(mine.filter((l) => l.demo).length >= 20, "상품등록 내역에 예시 상품 전부");
+  const cur = await listing("demo2");
+  assert.equal(cur.seller.uid, "mock-demoowner");
+  assert.equal(cur.seller.username, before.seller.username, "화면의 판매자 이름은 그대로");
+
+  assert.ok((await ok("/api/chats", { listingId: "demo2" }, b1)).room, "연결 후 채팅 가능");
+  const order = await buy(b1, "demo2");
+  assert.equal(order.seller.uid, "mock-demoowner");
+  const after = await listing("demo2");
+  assert.equal(after.stock, cur.stock - 1, "재고 차감이 저장됨");
+  const { sales } = await ok("/api/orders", undefined, owner);
+  assert.ok(sales.some((o) => o.id === order.id && o.status === "paid"), "판매 내역에 표시");
+  await ok(`/api/orders/${order.id}`, { action: "ship", method: "delivery", carrier: "CJ대한통운", trackingNumber: "6012-3456-7890" }, owner);
+  await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1);
+  const settled = (await ok(`/api/orders/${order.id}`, undefined, owner)).order;
+  assert.equal(settled.payout, "paid", "정산은 운영자 계정으로");
+
+  await ok("/api/listings/demo2", { status: "paused" }, owner, "PATCH");
+  assert.equal((await listing("demo2")).status, "paused");
+  assert.equal((await call("/api/listings/demo2", { status: "paused" }, b1, "PATCH")).status, 404, "다른 사람은 관리 불가");
+  await ok("/api/listings/demo2", { status: "selling" }, owner, "PATCH");
+  const home = await (await fetch(`${BASE}/listings/demo1`)).text();
+  assert.ok(!home.includes("실제 구매는 할 수 없어요"));
 });
 
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
