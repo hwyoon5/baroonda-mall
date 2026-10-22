@@ -51,7 +51,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const [title, setTitle] = useState("");
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("");
-  const [kind, setKind] = useState<Condition>("used");
+  const [kind, setKind] = useState<Condition>("new");
   const [usageGrade, setUsageGrade] = useState<UsageGrade>("A");
   const [usageNote, setUsageNote] = useState("");
   const [stock, setStock] = useState("10");
@@ -142,7 +142,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const valid =
     (!isNew || !!business) &&
     (isNew ? !todayDeal || discounted : location.trim() !== "") &&
-    title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0 && (!isNew || (optionsValid && (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid)));
+    title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && (isNew || methods.length > 0) && (!isNew || (optionsValid && (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid)));
   const updateOption = (i: number, patch: Partial<OptionDraft>) => setOptions((cur) => cur.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
   const addOptionGroup = (p?: OptionPreset) =>
@@ -216,10 +216,10 @@ export default function SellForm({ draftId }: { draftId?: string }) {
               todayDeal,
             }
           : { usageGrade, usageNote, negotiable }),
-        tradeMethods: methods,
+        tradeMethods: isNew ? ["delivery"] : methods,
         fastShipping,
-        meetingPlace,
-        location,
+        meetingPlace: isNew ? "" : meetingPlace,
+        location: isNew ? "" : location,
         description,
         images: photos,
         videos,
@@ -676,6 +676,12 @@ export default function SellForm({ draftId }: { draftId?: string }) {
       </label>
       )}
 
+      {isNew ? (
+        <label className="-mt-2 flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={fastShipping} onChange={(e) => setFastShipping(e.target.checked)} className="h-4 w-4 accent-pi" />
+          24시간 안에 발송할게요 <span className="text-xs font-bold text-amber-700">⚡빠른배송</span>
+        </label>
+      ) : (
       <fieldset>
         <legend className={label}>
           거래 방식 <span className="text-red-500">*</span>
@@ -710,8 +716,9 @@ export default function SellForm({ draftId }: { draftId?: string }) {
           </label>
         )}
       </fieldset>
+      )}
 
-      {methods.includes("direct") && (
+      {!isNew && methods.includes("direct") && (
         <div>
           <label htmlFor={`${id}-place`} className={label}>
             직거래 희망 장소
@@ -720,21 +727,15 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         </div>
       )}
 
-      <div>
-        <label htmlFor={`${id}-loc`} className={label}>
-          {isNew ? (
-            <>
-              내 동네 <span className="text-xs font-normal text-gray-400">(선택)</span>
-            </>
-          ) : (
-            <>
-              거래 지역 (동·면) <span className="text-red-500">*</span>
-            </>
-          )}
-        </label>
-        <input id={`${id}-loc`} value={location} onChange={(e) => setLocation(e.target.value)} maxLength={30} placeholder="예) 역삼동, 애월읍 봉성리" className={input} />
-        {!isNew && <p className="mt-1 text-[11px] text-gray-400">목록과 상세 화면에 📍 거래 지역으로 표시돼요.</p>}
-      </div>
+      {!isNew && (
+        <div>
+          <label htmlFor={`${id}-loc`} className={label}>
+            거래 지역 (동·면) <span className="text-red-500">*</span>
+          </label>
+          <input id={`${id}-loc`} value={location} onChange={(e) => setLocation(e.target.value)} maxLength={30} placeholder="예) 역삼동, 애월읍 봉성리" className={input} />
+          <p className="mt-1 text-[11px] text-gray-400">상품 상세 화면에 📍 거래 지역으로 표시돼요.</p>
+        </div>
+      )}
 
       <div>
         <label htmlFor={`${id}-desc`} className={label}>
