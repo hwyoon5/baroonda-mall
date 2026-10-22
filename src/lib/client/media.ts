@@ -1,11 +1,11 @@
 import { upload } from "@vercel/blob/client";
 import { TOKEN_KEY } from "./api";
-import type { MediaDir } from "@/lib/media";
+import { mediaPath, type MediaDir } from "@/lib/media";
 
 /** 브라우저에서 Vercel Blob으로 직접 올리고 공개 URL을 돌려준다(서버 함수 용량 제한 우회). */
 export async function uploadMedia(file: Blob, dir: MediaDir, ext: string, onProgress?: (pct: number) => void, signal?: AbortSignal) {
   const token = localStorage.getItem(TOKEN_KEY);
-  const res = await upload(`listings/${dir}/${Date.now().toString(36)}.${ext}`, file, {
+  const res = await upload(`${mediaPath(dir)}/${Date.now().toString(36)}.${ext}`, file, {
     access: "public",
     handleUploadUrl: "/api/upload",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -137,3 +137,27 @@ const toJpeg = (c: HTMLCanvasElement) => new Promise<Blob | null>((resolve) => c
 export const videoDuration = async (file: File) => (await inspectVideo(file)).duration;
 
 export const videoExt = (type: string) => (type === "video/quicktime" ? "mov" : type === "video/webm" ? "webm" : "mp4");
+
+/** 긴 변 maxSide px로 줄인 캔버스. */
+export async function resizeImage(file: File, maxSide: number): Promise<HTMLCanvasElement> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = url;
+    });
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export const canvasToJpeg = (c: HTMLCanvasElement, quality = 0.8) =>
+  new Promise<Blob>((resolve, reject) => c.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob"))), "image/jpeg", quality));

@@ -7,14 +7,19 @@ export const MAX_VIDEO_SECONDS = 60;
 export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
-export type MediaDir = "photo" | "video";
+/** 사업자 서류(사업자등록증·통신판매업 신고증 사본) */
+export const DOC_TYPES = [...PHOTO_TYPES, "application/pdf"];
+export const MAX_DOC_BYTES = 10 * 1024 * 1024;
+
+export type MediaDir = "photo" | "video" | "doc";
+export const mediaPath = (dir: MediaDir) => (dir === "doc" ? "business/doc" : `listings/${dir}`);
 
 /** Vercel Blob(public)에 /api/upload로 올린 파일 URL인지 확인한다. */
 export function isBlobUrl(src: unknown, dir: MediaDir): src is string {
   if (typeof src !== "string" || src.length > 500) return false;
   try {
     const u = new URL(src);
-    return u.protocol === "https:" && u.hostname.endsWith(".public.blob.vercel-storage.com") && u.pathname.startsWith(`/listings/${dir}/`);
+    return u.protocol === "https:" && u.hostname.endsWith(".public.blob.vercel-storage.com") && u.pathname.startsWith(`/${mediaPath(dir)}/`);
   } catch {
     return false;
   }
