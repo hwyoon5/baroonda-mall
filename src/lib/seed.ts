@@ -67,6 +67,7 @@ export function demoListings(): Listing[] {
       tradeMethods: s.methods ?? ["delivery"],
       location: seller.location,
       fastShipping: Boolean(s.fast),
+      ...(s.used ? {} : { policy: { shipping: s.fast ? { method: "택배", fee: 0 } : { method: "택배", fee: 0.05, freeOver: 1 } } }),
       images: [`/images/listings/demo${i + 1}.jpg`],
       ...(s.used
         ? { usageGrade: "A" as const }

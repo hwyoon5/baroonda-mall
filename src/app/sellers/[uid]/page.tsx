@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import ListingGrid from "@/components/ListingGrid";
 import SubHeader from "@/components/SubHeader";
 import { timeAgo } from "@/lib/format";
+import { withStats } from "@/lib/server/db";
 import { getSellerProfile } from "@/lib/server/sellers";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +59,7 @@ export default async function SellerPage({ params }: { params: Promise<{ uid: st
           </ul>
         )}
       </section>
-      <ListingGrid title={`판매 상품 ${listings.length}`} items={listings} />
+      <ListingGrid title={`판매 상품 ${listings.length}`} items={await withStats(listings)} />
     </>
   );
 }

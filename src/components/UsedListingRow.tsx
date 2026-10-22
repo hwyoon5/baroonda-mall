@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { timeAgo } from "@/lib/format";
 import { listingStatusText, type Listing } from "@/lib/types";
+import CardMeta from "./CardMeta";
 import ListingThumb from "./ListingThumb";
 import PiPrice from "./PiPrice";
 import TradeMethodTag from "./TradeMethodTag";
@@ -27,6 +28,7 @@ export default function UsedListingRow({ listing: l }: { listing: Listing }) {
             ))}
             {l.negotiable && <span className="rounded-sm bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600">가격제안</span>}
           </div>
+          <CardMeta listing={l} />
         </div>
       </Link>
     </li>

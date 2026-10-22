@@ -533,6 +533,30 @@ test("사업자 서류 사본·Pi 지갑 주소: 필수·형식·체크섬 검�
   assert.ok(html.includes("판매자 정보") && !html.includes(WALLET) && !html.includes(DOC), "지갑 주소·서류는 공개 화면에 없음");
 });
 
+test("상품 카드: 배송 조건·구경한 사람 수·별점·구매 건수 표시", async () => {
+  const s = await signin("cardmeta");
+  await ok("/api/me/business", { ...biz, shipping: { fee: 0 } }, s, "PUT");
+  const tag = `카드${run}`;
+  const { listing: free } = await ok("/api/listings", { ...newBase, title: `${tag} 무료`, stock: 3 }, s);
+  const { listing: paid } = await ok("/api/listings", { ...newBase, title: `${tag} 유료`, pricePi: 2, stock: 1, policy: { shipping: { fee: 3, freeOver: 50 } } }, s);
+  const { listing: draft } = await ok("/api/listings", { title: `${tag} 임시`, draft: true }, s);
+  assert.equal((await call(`/api/listings/${draft.id}/view`, {})).status, 404, "임시저장은 조회수 없음");
+  assert.equal((await call("/api/listings/nope-xyz/view", {})).status, 404);
+  for (let i = 1; i <= 3; i++) assert.equal((await ok(`/api/listings/${free.id}/view`, {})).views, i);
+  const order = await buy(b1, free.id);
+  await ok(`/api/orders/${order.id}`, { action: "ship", method: "direct" }, s);
+  await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1);
+  await ok(`/api/orders/${order.id}/review`, { rating: 4 }, b1);
+  const byId = Object.fromEntries((await ok(`/api/listings?ids=${free.id},${paid.id}`)).listings.map((l) => [l.id, l]));
+  assert.deepEqual(byId[free.id].stats, { views: 3, reviews: 1, rating: 4, shipping: { fee: 0 } }, "사업자 기본 배송 조건 연동");
+  assert.deepEqual(byId[paid.id].stats.shipping, { fee: 3, freeOver: 50 }, "상품별 배송 조건 우선");
+  assert.equal((await listing(free.id)).stats, undefined, "집계는 저장하지 않음");
+  const html = await (await fetch(`${BASE}/search?q=${encodeURIComponent(tag)}`)).text();
+  for (const t of ["무료배송", "배송비 3π · 50π 이상 무료", "3명 구경함", "4.0", "구매 1건"]) assert.ok(html.includes(t), t);
+  const home = await (await fetch(`${BASE}/`)).text();
+  assert.ok(home.includes("무료배송") && home.includes("구매 "), "메인 카드에도 표시");
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

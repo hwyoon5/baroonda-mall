@@ -1,4 +1,4 @@
-import type { SellerPolicy } from "./business";
+import type { SellerPolicy, ShippingTerms } from "./business";
 
 export type TradeMethod = "direct" | "delivery";
 export type ListingStatus = "draft" | "selling" | "reserved" | "sold" | "paused";
@@ -56,6 +56,18 @@ export type Listing = {
   reservedOrderId?: string;
   createdAt: string;
   demo?: boolean;
+  /** 상품 카드 표시용 집계. 조회할 때 붙이고 저장하지 않는다(withStats). */
+  stats?: ListingStats;
+};
+
+export type ListingStats = {
+  /** 상세 화면을 연 기기 수(같은 기기는 24시간에 1회) */
+  views: number;
+  reviews: number;
+  /** 이 상품 후기 평균 별점(소수 1자리), 후기가 없으면 비움 */
+  rating?: number;
+  /** 새 상품에 적용되는 배송 조건(상품별 입력 > 사업자 기본 규정) */
+  shipping?: ShippingTerms;
 };
 
 /**

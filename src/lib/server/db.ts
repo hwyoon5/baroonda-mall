@@ -13,6 +13,8 @@ type Kv = {
   hget(hash: string, field: string): Promise<string | null>;
   hset(hash: string, field: string, value: string): Promise<void>;
   hvals(hash: string): Promise<string[]>;
+  hgetall(hash: string): Promise<Record<string, string>>;
+  hincr(hash: string, field: string): Promise<number>;
   /** 성공하면 해제 함수, 이미 잠겨 있으면 null */
   lock(key: string, ttlMs: number): Promise<(() => Promise<void>) | null>;
 };
@@ -30,6 +32,12 @@ function memoryKv(): Kv {
     hget: async (hash, field) => h(hash).get(field) ?? null,
     hset: async (hash, field, value) => void h(hash).set(field, value),
     hvals: async (hash) => [...h(hash).values()],
+    hgetall: async (hash) => Object.fromEntries(h(hash)),
+    hincr: async (hash, field) => {
+      const n = Number(h(hash).get(field) ?? 0) + 1;
+      h(hash).set(field, String(n));
+      return n;
+    },
     lock: async (key) => {
       if (locks.has(key)) return null;
       locks.add(key);
@@ -53,6 +61,13 @@ function redisKv(url: string, token: string): Kv {
     hget: (hash, field) => cmd<string | null>("HGET", hash, field),
     hset: async (hash, field, value) => void (await cmd("HSET", hash, field, value)),
     hvals: (hash) => cmd<string[]>("HVALS", hash),
+    hgetall: async (hash) => {
+      const flat = (await cmd<string[] | null>("HGETALL", hash)) ?? [];
+      const out: Record<string, string> = {};
+      for (let i = 0; i + 1 < flat.length; i += 2) out[flat[i]] = flat[i + 1];
+      return out;
+    },
+    hincr: (hash, field) => cmd<number>("HINCRBY", hash, field, "1"),
     lock: async (key, ttlMs) => {
       const k = `bo:lock:${key}`;
       const token = randomUUID();
@@ -73,12 +88,12 @@ function guarded(base: Kv): Kv {
   const fail = async (): Promise<never> => {
     throw new PiConfigError("저장소(Upstash Redis)가 연결되지 않아 저장할 수 없어요. 관리자에게 문의해 주세요.");
   };
-  return { ...base, hset: fail, lock: fail };
+  return { ...base, hset: fail, hincr: fail, lock: fail };
 }
 
 const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : storageMisconfigured ? guarded(memoryKv()) : memoryKv();
 
-const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts" };
+const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts", views: "bo:views" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
 export async function withLock<T>(key: string, fn: () => Promise<T>, ttlMs = 20_000): Promise<T> {
@@ -133,7 +148,35 @@ export async function getListing(id: string): Promise<Listing | undefined> {
 
 export async function saveListing(listing: Listing) {
   if (listing.demo) return;
-  await kv.hset(K.listings, listing.id, JSON.stringify(listing));
+  await kv.hset(K.listings, listing.id, JSON.stringify({ ...listing, stats: undefined }));
+}
+
+export const addListingView = (id: string) => kv.hincr(K.views, id);
+
+/** 카드용 조회수·후기 평점·배송 조건을 붙인다. 저장하지 않는 표시용 값. */
+export async function withStats(listings: Listing[]): Promise<Listing[]> {
+  if (!listings.length) return listings;
+  const needsBiz = [...new Set(listings.filter((l) => l.condition === "new" && !l.demo && !l.policy).map((l) => l.seller.uid))];
+  const [views, reviews, businesses] = await Promise.all([
+    kv.hgetall(K.views),
+    kv.hvals(K.reviews),
+    Promise.all(needsBiz.map(async (uid) => [uid, await getBusiness(uid)] as const)),
+  ]);
+  const ratings = new Map<string, number[]>();
+  for (const r of reviews.map((v) => JSON.parse(v) as Review)) ratings.set(r.listingId, [...(ratings.get(r.listingId) ?? []), r.rating]);
+  const biz = new Map(businesses);
+  return listings.map((l) => {
+    const rs = ratings.get(l.id) ?? [];
+    return {
+      ...l,
+      stats: {
+        views: Number(views[l.id] ?? 0),
+        reviews: rs.length,
+        rating: rs.length ? Math.round((rs.reduce((a, b) => a + b, 0) / rs.length) * 10) / 10 : undefined,
+        shipping: l.condition === "new" ? (l.policy ? l.policy.shipping : biz.get(l.seller.uid)?.shipping) : undefined,
+      },
+    };
+  });
 }
 
 export async function getOrder(id: string): Promise<Order | undefined> {

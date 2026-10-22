@@ -81,6 +81,13 @@ export function normalizeShipping(v: unknown): { terms?: ShippingTerms; error?: 
 
 export const hasShipping = (t?: ShippingTerms) => !!t && Object.keys(t).length > 0;
 
+/** 새 상품 카드 한 줄 배송 문구. 직거래만·중고·정보 없음은 undefined(거래 방법 태그로 충분) */
+export function cardShippingText(l: { pricePi: number; condition: string; tradeMethods: string[] }, t?: ShippingTerms) {
+  if (!l.tradeMethods.includes("delivery") || l.condition !== "new" || t?.fee === undefined) return undefined;
+  if (t.fee === 0 || (t.freeOver !== undefined && l.pricePi >= t.freeOver)) return "무료배송";
+  return t.freeOver !== undefined ? `배송비 ${t.fee}π · ${t.freeOver}π 이상 무료` : `배송비 ${t.fee}π`;
+}
+
 /** 상품 상세·미리보기용 표 행 */
 export function shippingRows(t: ShippingTerms): [string, string][] {
   const pi = (n: number) => `${n}π`;
