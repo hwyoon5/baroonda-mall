@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
+import BusinessTestFill from "@/components/BusinessTestFill";
 import FilePicker from "@/components/FilePicker";
 import ShippingTermsFields from "@/components/ShippingTermsFields";
 import SubHeader from "@/components/SubHeader";
@@ -222,6 +223,7 @@ export default function BusinessPage() {
             {saved ? "✓ 등록 완료 · 새 상품(정식 판매)을 판매할 수 있어요. " : ""}
             새 상품(정식 판매)을 판매하려면 사업자 정보가 필요해요. 입력한 정보는 전자상거래법에 따라 상품 상세의 ‘판매자 정보’에 표시돼요. 개인 중고 거래에는 필요 없어요.
           </p>
+          <BusinessTestFill disabled={blobEnabled === null || !!uploading || busy} onFill={set} attach={attach} />
           {row("bizName", "상호명", { maxLength: 40, placeholder: "예: 바로상점" })}
           {row("ownerName", "대표자 성명", { maxLength: 20, placeholder: "예: 홍길동" })}
           {row("bizRegNo", "사업자등록번호", { inputMode: "numeric", maxLength: 12, placeholder: "000-00-00000", onBlur: () => set({ bizRegNo: formatBizRegNo(f.bizRegNo) }) })}
