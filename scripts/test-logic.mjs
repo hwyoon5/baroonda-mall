@@ -44,7 +44,7 @@ const buy = async (token, listingId, option) => {
   return order;
 };
 const biz = { bizName: "바로상점", ownerName: "홍길동", bizRegNo: "123-45-67891", mailOrderNo: "제 2024-서울강남-01234 호", address: "서울시 강남구 테헤란로 1", phone: "02-123-4567" };
-const newBase = { category: "fashion", pricePi: 1, tradeMethods: ["delivery"], images: [], condition: "new" };
+const newBase = { category: "fashion", pricePi: 1, tradeMethods: ["delivery"], images: [], condition: "new", location: "역삼동" };
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
@@ -512,6 +512,27 @@ test("검색 필터·정렬: 가격대·판매 유형·브랜드·빠른배송·
   assert.ok(h.includes("검색 결과 2개") && h.includes("낮은 가격순") && h.indexOf(`${tag} B`) < h.indexOf(`${tag} A`) && !h.includes(`${tag} C`));
   const hb = await (await fetch(`${BASE}/search?brand=Apple`)).text();
   assert.ok(hb.includes("필터 결과 1개") && hb.includes("아이패드"), "검색어 없이 브랜드만으로 결과");
+});
+
+test("오늘의 특가 노출 선택(정가 필수, 새 상품만)·개인 중고 거래 지역 필수", async () => {
+  const mk = (title, extra) => ok("/api/listings", { ...newBase, title, stock: 3, ...extra }, seller).then((r) => r.listing);
+  const deal = await mk("특가 선택", { pricePi: 1, originalPricePi: 2, todayDeal: true });
+  const off = await mk("할인만", { pricePi: 1, originalPricePi: 2 });
+  assert.deepEqual([deal.todayDeal, off.todayDeal], [true, undefined]);
+  const deals = (await ok("/api/listings?deals=1")).listings.map((l) => l.id);
+  assert.ok(deals.includes(deal.id) && !deals.includes(off.id), "토글한 할인 상품만 오늘의 특가");
+  assert.equal((await call("/api/listings", { ...newBase, title: "정가 없음", stock: 1, todayDeal: true }, seller)).status, 400);
+  assert.equal((await call("/api/listings", { ...newBase, title: "정가 낮음", stock: 1, pricePi: 2, originalPricePi: 1, todayDeal: true }, seller)).status, 400);
+  const home = await (await fetch(`${BASE}/`)).text();
+  const dealSection = home.slice(home.indexOf('id="today-deals"'), home.indexOf("</section>", home.indexOf('id="today-deals"')));
+  assert.ok(dealSection.includes("특가 선택") && !dealSection.includes("할인만"), "메인 오늘의 특가 연동");
+
+  const used = { ...newBase, condition: "used", usageGrade: "A", category: "digital" };
+  assert.equal((await call("/api/listings", { ...used, title: "지역 없음", location: " " }, seller)).status, 400);
+  const u = (await ok("/api/listings", { ...used, title: "망원동 중고", location: "망원동", originalPricePi: 5, todayDeal: true }, seller)).listing;
+  assert.deepEqual([u.location, u.todayDeal], ["망원동", undefined], "중고는 특가 노출 대상 아님");
+  assert.ok((await (await fetch(`${BASE}/listings/${u.id}`)).text()).includes("망원동"));
+  await ok("/api/listings", { title: "지역 없는 임시저장", draft: true, condition: "used" }, seller);
 });
 
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {

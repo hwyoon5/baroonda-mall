@@ -106,6 +106,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         setCategory(l.category);
         setPrice(l.pricePi ? String(l.pricePi) : "");
         setOriginalPrice(l.originalPricePi ? String(l.originalPricePi) : "");
+        setTodayDeal(!!l.todayDeal);
         setNegotiable(l.negotiable);
         setMethods(l.tradeMethods);
         setFastShipping(l.fastShipping);
@@ -128,6 +129,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   }, [draftId]);
   const [price, setPrice] = useState("");
   const [originalPrice, setOriginalPrice] = useState("");
+  const [todayDeal, setTodayDeal] = useState(false);
   const [negotiable, setNegotiable] = useState(false);
   const [methods, setMethods] = useState<TradeMethod[]>(["delivery"]);
   const [fastShipping, setFastShipping] = useState(false);
@@ -157,8 +159,10 @@ export default function SellForm({ draftId }: { draftId?: string }) {
   const stockNum = Number(stock);
   const stockValid = Number.isInteger(stockNum) && stockNum >= 1 && stockNum <= 9999;
   const needsBusiness = isNew && business === null;
+  const discounted = priceNum > 0 && Number(originalPrice) > priceNum;
   const valid =
     (!isNew || !!business) &&
+    (isNew ? !todayDeal || discounted : location.trim() !== "") &&
     title.trim() !== "" && category !== "" && price !== "" && priceNum > 0 && methods.length > 0 && (!isNew || (optionsValid && (combos.length ? variantTotal >= 1 && combos.length <= MAX_VARIANTS : stockValid)));
   const updateOption = (i: number, patch: Partial<OptionDraft>) => setOptions((cur) => cur.map((o, j) => (j === i ? { ...o, ...patch } : o)));
 
@@ -230,6 +234,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
               options: parsedOptions,
               variants: combos.map((c) => ({ options: c, stock: Number(variantStock[comboKey(c)]) || 0 })),
               originalPricePi: originalPrice ? Number(originalPrice) : null,
+              todayDeal,
             }
           : { usageGrade, usageNote, negotiable }),
         tradeMethods: methods,
@@ -673,6 +678,18 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         </div>
         )}
       </div>
+      {isNew && (
+        <div className="-mt-2">
+          <label className={`tap flex items-center justify-between gap-3 rounded-xl border px-3 py-3 ${todayDeal ? "border-red-300 bg-red-50" : "border-gray-200"}`}>
+            <span>
+              <span className="block text-sm font-bold text-gray-900">🔥 메인 &apos;오늘의 특가&apos;에 노출</span>
+              <span className="text-[11px] text-gray-500">정가보다 싸게 파는 상품만 노출돼요. 할인율이 함께 표시돼요.</span>
+            </span>
+            <input type="checkbox" role="switch" checked={todayDeal} onChange={(e) => setTodayDeal(e.target.checked)} className="h-5 w-5 shrink-0 accent-red-500" />
+          </label>
+          {todayDeal && !discounted && <p className="mt-1 text-xs text-red-500">판매 가격보다 높은 정가를 입력해야 오늘의 특가로 노출할 수 있어요.</p>}
+        </div>
+      )}
       {!isNew && (
       <label className="-mt-2 flex items-center gap-2 text-sm text-gray-700">
         <input type="checkbox" checked={negotiable} onChange={(e) => setNegotiable(e.target.checked)} className="h-4 w-4 accent-pi" />
@@ -726,9 +743,18 @@ export default function SellForm({ draftId }: { draftId?: string }) {
 
       <div>
         <label htmlFor={`${id}-loc`} className={label}>
-          내 동네
+          {isNew ? (
+            <>
+              내 동네 <span className="text-xs font-normal text-gray-400">(선택)</span>
+            </>
+          ) : (
+            <>
+              거래 지역 (동·면) <span className="text-red-500">*</span>
+            </>
+          )}
         </label>
-        <input id={`${id}-loc`} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="예) 역삼동" className={input} />
+        <input id={`${id}-loc`} value={location} onChange={(e) => setLocation(e.target.value)} maxLength={30} placeholder="예) 역삼동, 애월읍 봉성리" className={input} />
+        {!isNew && <p className="mt-1 text-[11px] text-gray-400">목록과 상세 화면에 📍 거래 지역으로 표시돼요.</p>}
       </div>
 
       <div>

@@ -18,6 +18,7 @@ export type ListingInput = Partial<{
   condition: string;
   pricePi: number;
   originalPricePi: number | null;
+  todayDeal: boolean;
   negotiable: boolean;
   tradeMethods: string[];
   meetingPlace: string;
@@ -98,6 +99,11 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
     }
   }
   need(isNew || isUsageGrade(b.usageGrade), "사용감을 선택해 주세요.");
+  const location = str(b.location, 30);
+  need(isNew || location, "개인 중고는 거래 지역(동·면)을 입력해 주세요.");
+  const discounted = pricePi !== null && !!originalPricePi && originalPricePi > pricePi;
+  const todayDeal = isNew && b.todayDeal === true;
+  need(!todayDeal || discounted, "오늘의 특가로 노출하려면 판매 가격보다 높은 정가를 입력해 주세요.");
 
   const images = b.images ?? [];
   if (!Array.isArray(images) || images.length > MAX_PHOTOS) throw new HttpError(400, `사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`);
@@ -125,10 +131,11 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
     condition: isNew ? "new" : "used",
     pricePi: price,
     originalPricePi: originalPricePi && originalPricePi > price ? originalPricePi : undefined,
+    todayDeal: todayDeal && discounted ? true : undefined,
     negotiable: !isNew && Boolean(b.negotiable),
     tradeMethods,
     meetingPlace: tradeMethods.includes("direct") ? str(b.meetingPlace, 60) || undefined : undefined,
-    location: str(b.location, 30) || undefined,
+    location: location || undefined,
     fastShipping: tradeMethods.includes("delivery") && Boolean(b.fastShipping),
     images,
     videos: videos.length ? videos : undefined,

@@ -63,6 +63,7 @@ export function demoListings(): Listing[] {
       condition: s.used ? "used" : "new",
       pricePi: s.price,
       originalPricePi: s.original,
+      todayDeal: !s.used && s.original ? true : undefined,
       negotiable: Boolean(s.used),
       tradeMethods: s.methods ?? ["delivery"],
       location: seller.location,

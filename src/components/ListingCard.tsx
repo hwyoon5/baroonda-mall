@@ -5,6 +5,7 @@ import FastDeliveryTag from "./FastDeliveryTag";
 import ListingThumb from "./ListingThumb";
 import PiPrice from "./PiPrice";
 import SellerInfo from "./SellerInfo";
+import TradeArea from "./TradeArea";
 import TradeMethodTag from "./TradeMethodTag";
 import WishButton from "./WishButton";
 
@@ -29,8 +30,9 @@ export default function ListingCard({ listing: l }: { listing: Listing }) {
           {rate > 0 && <span className="text-sm font-extrabold text-red-500">{rate}%</span>}
           <PiPrice value={l.pricePi} size="lg" />
         </div>
+        {l.condition === "used" && <TradeArea location={l.location} className="mt-1 text-xs" />}
         <div className="mt-1">
-          <SellerInfo seller={l.seller} location={l.location} createdAt={l.createdAt} />
+          <SellerInfo seller={l.seller} location={l.condition === "used" ? undefined : l.location} createdAt={l.createdAt} />
         </div>
       </Link>
       <div className="pointer-events-none absolute inset-x-0 top-0 aspect-square">
