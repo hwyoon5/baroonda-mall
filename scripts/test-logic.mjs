@@ -478,6 +478,36 @@ test("쇼츠: 등록·내 상품 연결·숨김·삭제·권한, 피드/관리 �
   assert.ok((await (await fetch(BASE + "/")).text()).includes('href="/shorts"'), "하단 쇼츠 탭");
 });
 
+test("배송비 결제: 기본·무료배송 기준·제주·도서산간·상품별 규정·직거래, 결제·환불 금액 포함", async () => {
+  const s = await signin("shipfee");
+  await ok("/api/me/business", { ...biz, shipping: { fee: 3, freeOver: 50, remoteFee: 5 } }, s, "PUT");
+  const mk = async (title, extra) => (await ok("/api/listings", { ...newBase, title, stock: 5, ...extra }, s)).listing;
+  const order = (id, extra = {}) => ok("/api/orders", { listingId: id, ...extra }, b2);
+  const l = await mk("배송비 상품", { pricePi: 10 });
+  let r = await order(l.id);
+  assert.deepEqual([r.order.itemAmount, r.order.shippingFee, r.order.amount, r.paymentData.amount], [10, 3, 13, 13]);
+  r = await order(l.id, { remoteArea: true });
+  assert.deepEqual([r.order.shippingFee, r.paymentData.amount, r.order.remoteArea], [8, 18, true]);
+  const free = await mk("무료배송 상품", { pricePi: 60 });
+  assert.equal((await order(free.id)).paymentData.amount, 60);
+  assert.equal((await order(free.id, { remoteArea: true })).paymentData.amount, 65, "무료배송이어도 도서산간 추가비");
+  const own = await mk("상품별 무료", { pricePi: 10, policy: { shipping: { fee: "0" } } });
+  assert.equal((await order(own.id)).paymentData.amount, 10, "상품별 규정 우선");
+  const both = await mk("직거래 가능", { pricePi: 10, tradeMethods: ["delivery", "direct"], meetingPlace: "역삼역" });
+  assert.equal((await order(both.id)).paymentData.amount, 13);
+  r = await order(both.id, { pickup: true });
+  assert.deepEqual([r.paymentData.amount, r.order.pickup], [10, true]);
+  assert.equal((await call("/api/orders", { listingId: l.id, pickup: true }, b2)).status, 400, "택배 전용 상품은 직거래 불가");
+  const used = await mk("중고 배송비 없음", { pricePi: 10, condition: "used", usageGrade: "A", category: "digital" });
+  assert.equal((await order(used.id)).paymentData.amount, 10);
+
+  const paid = await buy(b2, l.id);
+  assert.equal(paid.amount, 13);
+  assert.equal((await ok(`/api/orders/${paid.id}`, undefined, b2)).order.status, "paid");
+  const o = (await ok(`/api/orders/${paid.id}`, { action: "refund_request", reason: "단순 변심" }, b2)).order;
+  assert.equal(o.refund.transfer.amount, 13, "발송 전 환불은 배송비 포함 전액");
+});
+
 test("검색 필터·정렬: 가격대·판매 유형·브랜드·빠른배송·구매 가능, 가격/인기/할인율/브랜드순", async () => {
   const tag = `zq${run}`;
   const mk = async (name, extra) => (await ok("/api/listings", { ...newBase, title: `${tag} ${name}`, stock: 3, ...extra }, seller)).listing;

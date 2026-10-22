@@ -10,7 +10,7 @@ import TradeMethodTag from "@/components/TradeMethodTag";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
 import ShippingTable from "@/components/ShippingTable";
-import { POLICY_FIELDS, formatBizRegNo, hasPolicy, pickPolicy } from "@/lib/business";
+import { POLICY_FIELDS, effectiveShipping, formatBizRegNo, hasPolicy, pickPolicy } from "@/lib/business";
 import { getBusiness, getListing, listReviewsForSeller } from "@/lib/server/db";
 import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
@@ -185,7 +185,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       )}
 
       <div className="h-16" aria-hidden />
-      <BuyBar listing={listing} />
+      <BuyBar listing={listing} shipping={effectiveShipping(listing, business)} />
     </>
   );
 }

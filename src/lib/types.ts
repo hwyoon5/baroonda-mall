@@ -103,6 +103,12 @@ export type Order = {
   variantId?: string;
   fulfillment?: { method: TradeMethod; carrier?: string; trackingNumber?: string; shippedAt: string };
   amount: number;
+  /** amount = itemAmount + shippingFee. 배송비 결제 도입 전 주문에는 없다. */
+  itemAmount?: number;
+  shippingFee?: number;
+  remoteArea?: boolean;
+  /** 택배·직거래 모두 가능한 상품에서 구매자가 직거래를 고른 경우 */
+  pickup?: boolean;
   buyer: PiUser;
   seller: PiUser;
   status: OrderStatus;
