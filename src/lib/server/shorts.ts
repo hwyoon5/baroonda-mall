@@ -23,7 +23,7 @@ export function parsePosterUrl(v: unknown) {
 export async function ownListingId(uid: string, listingId: unknown) {
   if (listingId === undefined || listingId === null || listingId === "") return undefined;
   const l = typeof listingId === "string" ? await getListing(listingId) : undefined;
-  if (!l || l.demo || l.seller.uid !== uid || l.status === "draft") throw new HttpError(400, "내가 올린 상품만 연결할 수 있어요.");
+  if (!l || l.seller.uid !== uid || l.status === "draft") throw new HttpError(400, "내가 올린 상품만 연결할 수 있어요.");
   return l.id;
 }
 

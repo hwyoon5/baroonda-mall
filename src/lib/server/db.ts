@@ -1,7 +1,7 @@
 import type { SellerBusiness } from "@/lib/business";
 import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
-import type { ChatMessage, ChatRoom, Listing, Order, Review, Short } from "../types";
+import type { ChatMessage, ChatRoom, Listing, Order, PiUser, Review, Short } from "../types";
 import { HttpError } from "./http";
 import { PiConfigError } from "./pi";
 
@@ -78,7 +78,7 @@ function guarded(base: Kv): Kv {
 
 const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : storageMisconfigured ? guarded(memoryKv()) : memoryKv();
 
-const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts" };
+const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts", config: "bo:config" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
 export async function withLock<T>(key: string, fn: () => Promise<T>, ttlMs = 20_000): Promise<T> {
@@ -108,9 +108,39 @@ export type ListingFilter = {
   includeDrafts?: boolean;
 };
 
+/** 예시 상품을 맡아 관리하는 운영자 Pi 계정(DEMO_SELLER_USERNAME). 그 계정으로 로그인하면 기록된다. */
+export const demoSellerUsername = process.env.DEMO_SELLER_USERNAME?.trim().replace(/^@/, "") || undefined;
+
+export async function getDemoOwner(): Promise<PiUser | undefined> {
+  const raw = await kv.hget(K.config, "demo-owner");
+  return raw ? (JSON.parse(raw) as PiUser) : undefined;
+}
+
+/** 로그인한 사용자가 운영자 계정이면 예시 상품 소유자로 연결한다. */
+export async function claimDemoOwner(user: PiUser) {
+  if (!demoSellerUsername || user.username.toLowerCase() !== demoSellerUsername.toLowerCase()) return;
+  const cur = await getDemoOwner();
+  if (cur?.uid === user.uid && cur.username === user.username) return;
+  await kv.hset(K.config, "demo-owner", JSON.stringify(user));
+}
+
+/** 예시 상품은 화면에 보이는 판매자 이름은 그대로 두고, 실제 소유(관리·정산)는 운영자 계정으로 돌린다. */
+function ownDemo(l: Listing, owner: PiUser | undefined): Listing {
+  return l.demo && owner && l.seller.uid !== owner.uid ? { ...l, seller: { uid: owner.uid, username: l.seller.username } } : l;
+}
+
+/** 예시 판매자 계정(demo-*)이 아직 운영자에게 연결되지 않은 상품인지 */
+export const isUnclaimedDemo = (l: Listing) => !!l.demo && l.seller.uid.startsWith("demo-");
+
 export async function listListings(f: ListingFilter = {}): Promise<Listing[]> {
-  const stored = (await kv.hvals(K.listings)).map((v) => JSON.parse(v) as Listing);
-  let all = [...stored, ...demoListings()];
+  const [vals, owner] = await Promise.all([kv.hvals(K.listings), getDemoOwner()]);
+  const byId = new Map(demoListings().map((l) => [l.id, l]));
+  // 한 번이라도 저장된(구매·수정된) 예시 상품은 저장본이 우선이다.
+  for (const v of vals) {
+    const l = JSON.parse(v) as Listing;
+    byId.set(l.id, l);
+  }
+  let all = [...byId.values()].map((l) => ownDemo(l, owner));
   if (f.ids) all = all.filter((l) => f.ids!.includes(l.id));
   if (f.sellerUid) all = all.filter((l) => l.seller.uid === f.sellerUid);
   if (f.category === "used") all = all.filter((l) => l.condition === "used");
@@ -126,13 +156,12 @@ export async function listListings(f: ListingFilter = {}): Promise<Listing[]> {
 }
 
 export async function getListing(id: string): Promise<Listing | undefined> {
-  const raw = await kv.hget(K.listings, id);
-  if (raw) return JSON.parse(raw) as Listing;
-  return demoListings().find((l) => l.id === id);
+  const [raw, owner] = await Promise.all([kv.hget(K.listings, id), getDemoOwner()]);
+  const l = raw ? (JSON.parse(raw) as Listing) : demoListings().find((d) => d.id === id);
+  return l && ownDemo(l, owner);
 }
 
 export async function saveListing(listing: Listing) {
-  if (listing.demo) return;
   await kv.hset(K.listings, listing.id, JSON.stringify(listing));
 }
 
