@@ -1,7 +1,7 @@
 import ListingGrid from "@/components/ListingGrid";
 import SearchControls from "@/components/SearchControls";
 import SearchHeader from "@/components/SearchHeader";
-import { listListings } from "@/lib/server/db";
+import { listListings, withStats } from "@/lib/server/db";
 import { activeFilterCount, applySearch, parseSearch, searchFacets } from "@/lib/search";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   const s = parseSearch(await searchParams);
   const active = !!s.q || activeFilterCount(s) > 0;
   const base = active ? await listListings({ q: s.q || undefined }) : [];
-  const items = applySearch(base, s);
+  const items = await withStats(applySearch(base, s));
   return (
     <>
       <SearchHeader initialQuery={s.q} />

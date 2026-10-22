@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { discountRate, formatPi } from "@/lib/format";
 import type { Listing } from "@/lib/types";
+import CardMeta from "./CardMeta";
 import Countdown from "./Countdown";
 import ListingThumb from "./ListingThumb";
 import PiPrice from "./PiPrice";
@@ -34,6 +35,7 @@ export default function TodayDeals({ deals }: { deals: Listing[] }) {
               <p className="mt-2 line-clamp-2 text-xs leading-snug text-gray-800">{d.title}</p>
               {d.originalPricePi && <p className="mt-1 text-[11px] text-gray-400 line-through">π {formatPi(d.originalPricePi)}</p>}
               <PiPrice value={d.pricePi} size="md" />
+              <CardMeta listing={d} />
               <p className="mt-0.5 truncate text-[10px] text-gray-500">{d.seller.username}</p>
             </Link>
           </li>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { discountRate } from "@/lib/format";
 import type { Listing } from "@/lib/types";
+import CardMeta from "./CardMeta";
 import FastDeliveryTag from "./FastDeliveryTag";
 import ListingThumb from "./ListingThumb";
 import PiPrice from "./PiPrice";
@@ -29,6 +30,7 @@ export default function ListingCard({ listing: l }: { listing: Listing }) {
           {rate > 0 && <span className="text-sm font-extrabold text-red-500">{rate}%</span>}
           <PiPrice value={l.pricePi} size="lg" />
         </div>
+        <CardMeta listing={l} />
         <div className="mt-1">
           <SellerInfo seller={l.seller} location={l.location} createdAt={l.createdAt} />
         </div>

@@ -7,6 +7,7 @@ import ListingThumb from "@/components/ListingThumb";
 import SellerInfo from "@/components/SellerInfo";
 import SubHeader from "@/components/SubHeader";
 import TradeMethodTag from "@/components/TradeMethodTag";
+import ViewTracker from "@/components/ViewTracker";
 import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
 import ShippingTable from "@/components/ShippingTable";
@@ -34,6 +35,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <SubHeader title={listing.title} />
+      <ViewTracker id={listing.id} />
       {listing.images.length > 1 || videos.length ? (
         <div className="relative">
           <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">

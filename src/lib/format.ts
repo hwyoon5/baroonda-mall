@@ -7,6 +7,11 @@ export function discountRate(price: number, original?: number) {
   return Math.round(((original - price) / original) * 100);
 }
 
+/** 12,345 → 1.2만 */
+export function formatCount(n: number) {
+  return n >= 10000 ? `${Math.floor(n / 1000) / 10}만` : n.toLocaleString("ko-KR");
+}
+
 export function timeAgo(iso: string, now = Date.now()) {
   const minutes = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
   if (minutes < 1) return "방금 전";
