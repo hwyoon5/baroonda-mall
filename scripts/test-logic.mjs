@@ -533,6 +533,23 @@ test("사업자 서류 사본·Pi 지갑 주소: 필수·형식·체크섬 검�
   assert.ok(html.includes("판매자 정보") && !html.includes(WALLET) && !html.includes(DOC), "지갑 주소·서류는 공개 화면에 없음");
 });
 
+test("메인 최근 상품은 개인 중고 제외, 중고마켓 세부 카테고리(?sub=)", async () => {
+  const tag = `분류${Date.now().toString(36)}`;
+  await ok("/api/listings", { ...newBase, title: `${tag} 중고폰`, condition: "used", usageGrade: "A", category: "digital" }, seller);
+  await ok("/api/listings", { ...newBase, title: `${tag} 새옷`, stock: 1 }, seller);
+  const home = await (await fetch(`${BASE}/`)).text();
+  assert.ok(home.includes(`${tag} 새옷`), "새 상품은 메인 노출");
+  assert.ok(!home.includes(`${tag} 중고폰`), "중고는 메인 '방금 올라온 상품'에서 제외");
+  const all = await (await fetch(`${BASE}/category/used`)).text();
+  assert.ok(all.includes("중고 세부 카테고리") && all.includes(`${tag} 중고폰`) && !all.includes(`${tag} 새옷`));
+  const digital = await (await fetch(`${BASE}/category/used?sub=digital`)).text();
+  assert.ok(digital.includes(`${tag} 중고폰`) && digital.includes('aria-current="page"'));
+  const fashion = await (await fetch(`${BASE}/category/used?sub=fashion`)).text();
+  assert.ok(!fashion.includes(`${tag} 중고폰`), "다른 세부 분류에는 안 나옴");
+  const bogus = await (await fetch(`${BASE}/category/used?sub=nope`)).text();
+  assert.ok(bogus.includes(`${tag} 중고폰`), "모르는 분류는 전체로");
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");
