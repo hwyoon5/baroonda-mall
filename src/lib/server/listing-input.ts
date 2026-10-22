@@ -1,4 +1,4 @@
-import { isListingCategory } from "@/lib/categories";
+import { isListingCategory, normalizeCategory } from "@/lib/categories";
 import type { Listing, ListingOption, TradeMethod, Variant } from "@/lib/types";
 import { isBlobUrl, MAX_PHOTOS, MAX_VIDEOS } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS } from "@/lib/options";
@@ -73,7 +73,7 @@ export function parseListingInput(b: ListingInput, draft: boolean): ParsedListin
   if (b.condition !== undefined && b.condition !== "new") throw new HttpError(400, "새 상품(정식 판매)만 등록할 수 있어요. 개인 중고 거래는 지원하지 않아요.");
   const title = str(b.title, 40);
   if (!title) throw new HttpError(400, "제목을 입력해 주세요.");
-  const category = str(b.category, 20);
+  const category = normalizeCategory(str(b.category, 20));
   need(isListingCategory(category), "카테고리를 선택해 주세요.");
   const pricePi = piAmount(b.pricePi);
   need(pricePi !== null, "판매 가격을 π 단위로 올바르게 입력해 주세요.");

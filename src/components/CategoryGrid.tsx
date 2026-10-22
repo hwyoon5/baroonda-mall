@@ -17,8 +17,10 @@ export default function CategoryGrid({ items = defaultCategories }: { items?: Ca
                   </span>
                 )}
               </span>
-              <span className={`text-[11px] font-medium ${c.badge ? "font-bold text-pi" : "text-gray-700"}`}>
-                {c.name}
+              <span
+                className={`break-keep text-center text-[11px] font-medium leading-tight ${c.badge ? "font-bold text-pi" : "text-gray-700"}`}
+              >
+                {c.name.replaceAll("/", "/\u200b")}
               </span>
             </Link>
           </li>

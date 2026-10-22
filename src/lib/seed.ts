@@ -41,7 +41,7 @@ const seeds: Seed[] = [
   { title: "논스틱 프라이팬 28cm", category: "living", emoji: "🍳", bg: "bg-orange-50", price: 0.95, seller: 1 },
   { title: "강아지 동결건조 간식 트릿", category: "pet", emoji: "🦴", bg: "bg-lime-50", price: 0.48, fast: true, seller: 4 },
   { title: "요가매트 TPE 8mm 논슬립", category: "sports", emoji: "🧘", bg: "bg-violet-50", price: 1.05, original: 1.5, seller: 3 },
-  { title: "아기 원목 블록 쌓기 장난감", category: "baby", emoji: "🧸", bg: "bg-yellow-50", price: 0.65, used: true, seller: 1 },
+  { title: "아기 원목 블록 쌓기 장난감", category: "fashion", emoji: "🧸", bg: "bg-yellow-50", price: 0.65, used: true, seller: 1 },
   { title: "고양이 스크래쳐 하우스 (새상품)", category: "pet", emoji: "🐱", bg: "bg-amber-50", price: 0.88, original: 1.2, seller: 4 },
   { title: "경량 러닝화 에어 쿠션", brand: "Nike", category: "sports", emoji: "👟", bg: "bg-sky-50", price: 2.4, original: 3.2, fast: true, seller: 3 },
   { title: "해리포터 전집 23권 (거의 새책)", category: "sports", emoji: "📚", bg: "bg-indigo-50", price: 0.9, used: true, seller: 1 },
