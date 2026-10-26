@@ -157,16 +157,15 @@ export default function MyShortsPage() {
 
   const count = shorts?.length ?? 0;
   const full = count >= MAX_SHORTS_PER_USER;
+  // 저장소 확인 중(null)에는 막지 않는다. 고른 뒤 업로드 단계에서 실패하면 그때 알린다.
   const blockReason =
-    blobEnabled === null
-      ? "업로드를 준비하고 있어요. 잠시 후 다시 눌러 주세요."
-      : blobEnabled === false
-        ? "동영상 저장소가 연결되지 않아 지금은 올릴 수 없어요."
-        : full
-          ? `쇼츠는 최대 ${MAX_SHORTS_PER_USER}개까지 등록할 수 있어요. 안 쓰는 쇼츠를 삭제해 주세요.`
-          : phase !== "idle"
-            ? "동영상을 올리는 중이에요."
-            : null;
+    blobEnabled === false
+      ? "동영상 저장소가 연결되지 않아 지금은 올릴 수 없어요."
+      : full
+        ? `쇼츠는 최대 ${MAX_SHORTS_PER_USER}개까지 등록할 수 있어요. 안 쓰는 쇼츠를 삭제해 주세요.`
+        : phase !== "idle"
+          ? "동영상을 올리는 중이에요."
+          : null;
   const onBlocked = () => blockReason && showToast(blockReason);
 
   return (
