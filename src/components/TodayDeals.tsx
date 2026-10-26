@@ -24,7 +24,7 @@ export default function TodayDeals({ deals }: { deals: Listing[] }) {
 
       <ul className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
         {deals.map((d) => (
-          <li key={d.id} className="w-36 shrink-0 snap-start">
+          <li key={d.id} className="w-36 shrink-0 snap-start lg:w-44">
             <Link href={`/listings/${d.id}`} className="tap block">
               <div className="relative">
                 <ListingThumb listing={d} className="aspect-square rounded-xl" />

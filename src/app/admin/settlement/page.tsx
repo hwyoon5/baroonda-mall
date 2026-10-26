@@ -13,7 +13,7 @@ export default function AdminSettlementPage() {
     <AdminShell title="정산" error={error} loading={!data}>
       {data && s && (
         <>
-          <section className="grid grid-cols-2 gap-2 p-4">
+          <section className="grid grid-cols-2 gap-2 p-4 lg:grid-cols-4">
             {(
               [
                 ["매출 (구매 확정)", s.confirmedSales, `구매 확정 ${s.confirmedCount}건 · 자동 ${s.autoConfirmedCount}건`, "text-gray-900"],

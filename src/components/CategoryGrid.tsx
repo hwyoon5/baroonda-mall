@@ -4,7 +4,7 @@ import { homeCategories as defaultCategories, type Category } from "@/lib/catego
 export default function CategoryGrid({ items = defaultCategories }: { items?: Category[] }) {
   return (
     <section aria-label="카테고리" className="bg-white px-3 py-4">
-      <ul className="grid grid-cols-5 gap-y-4">
+      <ul className="grid grid-cols-5 gap-y-4 lg:grid-cols-10">
         {items.map((c) => (
           <li key={c.id}>
             <Link href={c.href} className="tap flex flex-col items-center gap-1.5 rounded-xl py-1">

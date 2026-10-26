@@ -14,7 +14,7 @@ const items = [
 export default function BottomNav() {
   const pathname = usePathname() ?? "/";
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
+    <nav className={`frame fixed inset-x-0 bottom-0 z-30 ${pathname.startsWith("/admin") ? "lg:hidden" : ""} border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]`}>
       <ul className="grid grid-cols-5">
         {items.map((it) => {
           const active = it.match(pathname);

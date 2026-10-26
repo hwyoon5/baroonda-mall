@@ -53,3 +53,17 @@ body {
   transform: scale(0.97);
   opacity: 0.85;
 }
+
+/* 앱 틀: 휴대폰은 28rem 한 단, PC(1024px~)는 넓게. 관리자(.wide)는 화면 전체 */
+.frame {
+  max-width: 28rem;
+  margin-inline: auto;
+}
+@media (min-width: 64rem) {
+  .frame {
+    max-width: 75rem;
+  }
+  .wide .frame {
+    max-width: none;
+  }
+}

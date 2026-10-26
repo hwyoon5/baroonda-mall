@@ -38,6 +38,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     <>
       <SubHeader title={listing.title} />
       <ViewTracker id={listing.id} />
+      <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:px-6 lg:pt-6">
+      <div className="lg:sticky lg:top-20 lg:self-start lg:overflow-hidden lg:rounded-2xl">
       {listing.images.length > 1 || videos.length ? (
         <div className="relative">
           <div className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto">
@@ -57,6 +59,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       ) : (
         <ListingThumb listing={listing} className="aspect-square" emojiClass="text-[9rem]" />
       )}
+      </div>
+      <div className="lg:min-w-0 lg:overflow-hidden lg:rounded-2xl">
 
       <section className="bg-white px-4 py-4">
         <Link href={`/sellers/${encodeURIComponent(listing.seller.uid)}`} className="tap flex items-center justify-between gap-2">
@@ -195,6 +199,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         </section>
       )}
 
+      </div>
+      </div>
       <div className="h-16" aria-hidden />
       <BuyBar listing={listing} shipping={effectiveShipping(listing, business)} />
     </>

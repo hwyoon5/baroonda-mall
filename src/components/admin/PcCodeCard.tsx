@@ -18,7 +18,7 @@ export default function PcCodeCard() {
   }, [issued]);
 
   return (
-    <section className="mt-2 bg-white px-4 py-4">
+    <section className="mt-2 bg-white px-4 py-4 lg:mt-0 lg:rounded-xl">
       <h2 className="text-sm font-extrabold text-gray-900">PC에서 관리자 화면 열기</h2>
       <p className="mt-1 text-xs leading-relaxed text-gray-500">코드를 받아 PC 브라우저에서 이 사이트의 관리자 화면(/admin)에 입력하세요. 코드는 5분 동안 한 번만 쓸 수 있어요. 다른 사람에게 알려 주지 마세요.</p>
       {issued && left > 0 ? (

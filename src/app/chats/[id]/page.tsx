@@ -106,7 +106,7 @@ export default function ChatRoomPage({ params }: { params: Promise<{ id: string 
             })}
             <div ref={bottom} />
           </ul>
-          <form onSubmit={send} className="fixed inset-x-0 bottom-[calc(57px+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md gap-2 border-t border-gray-100 bg-white px-3 py-2">
+          <form onSubmit={send} className="fixed inset-x-0 bottom-[calc(57px+env(safe-area-inset-bottom))] z-30 frame flex gap-2 border-t border-gray-100 bg-white px-3 py-2">
             <input
               aria-label="메시지"
               value={text}

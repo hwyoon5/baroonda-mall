@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import AppFrame from "@/components/AppFrame";
 import BottomNav from "@/components/BottomNav";
 import { PiProvider } from "@/components/pi/PiProvider";
 import { StoreProvider } from "@/components/store/StoreProvider";
@@ -25,8 +26,7 @@ export default function RootLayout({
       <body>
         <PiProvider>
           <StoreProvider>
-            <div className="mx-auto min-h-dvh max-w-md bg-gray-100 pb-20 shadow-xl">{children}</div>
-            <BottomNav />
+            <AppFrame nav={<BottomNav />}>{children}</AppFrame>
           </StoreProvider>
         </PiProvider>
       </body>

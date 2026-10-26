@@ -54,7 +54,7 @@ function Chart({ series, metric }: { series: StatsPoint[]; metric: Metric }) {
         합계 <b className="text-gray-900">{metric.pi ? "π " : ""}{num(Math.round(total * 1e7) / 1e7)}</b>
         {total > 0 && <span className="ml-2">최고 {series[peak].label} · {metric.pi ? "π " : ""}{num(vals[peak])}</span>}
       </p>
-      <div className="mt-2 flex h-36 items-end gap-[2px]" role="img" aria-label={`${metric.label} 추이`}>
+      <div className="mt-2 flex h-36 items-end gap-[2px] lg:h-56" role="img" aria-label={`${metric.label} 추이`}>
         {series.map((p, i) => (
           <div key={p.key} className="flex h-full flex-1 flex-col justify-end" title={`${p.label} · ${metric.label} ${metric.pi ? "π " : ""}${num(vals[i])}`}>
             <span className="w-full rounded-t-sm" style={{ height: `${Math.max(vals[i] ? 3 : 0, (vals[i] / max) * 100)}%`, background: metric.color, opacity: i === peak && total ? 1 : 0.6 }} />
@@ -74,7 +74,7 @@ function Chart({ series, metric }: { series: StatsPoint[]; metric: Metric }) {
 
 function Ranking({ title, rows, total }: { title: string; rows: StatsData["sellers"]; total: number }) {
   return (
-    <section className="mt-2 bg-white px-4 py-4">
+    <section className="mt-2 bg-white px-4 py-4 lg:mt-0 lg:rounded-xl">
       <h2 className="text-sm font-extrabold text-gray-900">{title}</h2>
       {rows.length === 0 ? (
         <p className="py-4 text-center text-xs text-gray-400">이 기간 거래가 없어요.</p>
@@ -124,7 +124,7 @@ export default function AdminStatsPage() {
 
   return (
     <AdminShell title="매출·통계" error={error}>
-      <div className="sticky top-[6.5rem] z-[5] flex gap-1.5 border-b border-gray-100 bg-white px-4 py-2.5">
+      <div className="sticky top-[6.5rem] z-[5] lg:top-14 flex gap-1.5 border-b border-gray-100 bg-white px-4 py-2.5">
         {STATS_RANGES.map((r) => (
           <button
             key={r.id}
@@ -144,7 +144,7 @@ export default function AdminStatsPage() {
           <p className="px-4 pt-3 text-[11px] text-gray-400">
             {new Date(d.from).toLocaleDateString("ko-KR")} ~ {new Date(d.to).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · 비교: {prevLabel}
           </p>
-          <section className="grid grid-cols-2 gap-2 p-4 pt-2">
+          <section className="grid grid-cols-2 gap-2 p-4 pt-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             <Card label="거래액 (GMV)" k="gmv" cur={d.current} prev={d.previous} unit="π" />
             <Card label="주문 건수" k="orders" cur={d.current} prev={d.previous} unit="건" />
             <Card label="평균 결제액" k="aov" cur={d.current} prev={d.previous} unit="π" />
@@ -159,7 +159,7 @@ export default function AdminStatsPage() {
             <Card label="새로 등록된 상품" k="newListings" cur={d.current} prev={d.previous} unit="개" />
           </section>
 
-          <section className="bg-white px-4 py-4">
+          <section className="bg-white px-4 py-4 lg:mx-4 lg:rounded-xl">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-extrabold text-gray-900">{range === "today" ? "시간대별 추이" : "일별 추이"}</h2>
               <button type="button" onClick={() => downloadCsv(d)} className="tap rounded-full border border-gray-200 px-2.5 py-1 text-[11px] text-gray-600">
@@ -185,7 +185,7 @@ export default function AdminStatsPage() {
             </div>
           </section>
 
-          <section className="mt-2 grid grid-cols-3 gap-2 bg-white px-4 py-4 text-center">
+          <section className="mt-2 grid grid-cols-3 gap-2 bg-white px-4 py-4 text-center lg:mx-4 lg:rounded-xl">
             {(
               [
                 ["누적 이용자", d.totals.users],
@@ -200,9 +200,11 @@ export default function AdminStatsPage() {
             ))}
           </section>
 
+          <div className="lg:mt-4 lg:grid lg:grid-cols-3 lg:items-start lg:gap-4 lg:px-4">
           <Ranking title="카테고리별 거래액" rows={d.categories} total={d.current.gmv} />
           <Ranking title="판매자 TOP 5" rows={d.sellers} total={d.current.gmv} />
           <Ranking title="상품 TOP 5" rows={d.products} total={d.current.gmv} />
+          </div>
 
           <p className="px-4 py-4 text-[10px] leading-relaxed text-gray-400">
             거래액은 결제가 완료된 주문 금액이에요(이후 환불된 주문 포함, 결제일 기준). 구매 확정 매출·수수료는 확정일, 환불은 환불일 기준이에요. 방문자는 Pi 로그인 상태로 앱을 연 이용자 수이고, 이용자 기록은 이 기능 배포 후부터 쌓여요. 그 전 이용자는 첫 주문·상품 등록일을 가입일로 봐요.

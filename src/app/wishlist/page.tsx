@@ -23,7 +23,7 @@ export default function WishlistPage() {
       <SubHeader title="찜 목록" />
       <section className="bg-white px-4 py-4">
         {items && items.length === 0 && <p className="py-16 text-center text-sm text-gray-500">찜한 상품이 없어요.</p>}
-        <ul className="grid grid-cols-2 gap-x-3 gap-y-5">
+        <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
           {items?.map((l) => (
             <ListingCard key={l.id} listing={l} />
           ))}

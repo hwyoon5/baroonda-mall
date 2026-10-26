@@ -46,7 +46,7 @@ export default function ListingFeed({ initial, total, query }: { initial: Listin
 
   return (
     <>
-      <ul className="grid grid-cols-2 gap-x-3 gap-y-5">
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
         {items.map((l) => (
           <ListingCard key={l.id} listing={l} />
         ))}
