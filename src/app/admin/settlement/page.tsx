@@ -1,19 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import AdminShell, { useAdminApi } from "@/components/admin/AdminShell";
-import { dailyStats, orderMetrics, type AdminOrdersData } from "@/lib/admin";
+import type { AdminOrdersData } from "@/lib/admin";
 
-/** 관리자: 구매 확정 기준 매출·정산 집계, 판매자별 정산, 최근 14일 통계 */
+/** 관리자: 구매 확정 기준 매출·정산 집계, 판매자별 정산 */
 export default function AdminSettlementPage() {
   const { data, error } = useAdminApi<AdminOrdersData>("/api/admin/orders");
   const s = data?.summary;
-  const daily = data ? dailyStats(data.orders) : [];
-  const max = Math.max(1, ...daily.map((d) => Math.max(d.paid, d.confirmed)));
-  const m = data ? orderMetrics(data.orders) : null;
 
   return (
-    <AdminShell title="정산·통계" error={error} loading={!data}>
-      {data && s && m && (
+    <AdminShell title="정산" error={error} loading={!data}>
+      {data && s && (
         <>
           <section className="grid grid-cols-2 gap-2 p-4">
             {(
@@ -39,68 +37,9 @@ export default function AdminSettlementPage() {
             매출과 정산 대금은 구매 확정된 주문만 집계해요. 구매자 결제금(누적 π {s.paidTotal})은 확정 전까지 앱 지갑에 보관되고, 구매 확정(배송 완료 후 {data.autoConfirmDays}일이 지나면 자동) 시 수수료를 뺀 금액이 판매자에게 정산(Pi A2U)돼요.
           </p>
 
-          <section className="mt-2 bg-white px-4 py-4">
-            <h2 className="text-sm font-extrabold text-gray-900">최근 14일</h2>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-              {(
-                [
-                  ["평균 결제액", `π ${m.avgAmount}`],
-                  ["구매 확정률", `${m.confirmRate}%`],
-                  ["반품·환불률", `${m.refundRate}%`],
-                ] as const
-              ).map(([t, v]) => (
-                <div key={t} className="rounded-lg bg-gray-50 p-2">
-                  <p className="text-[10px] text-gray-500">{t}</p>
-                  <p className="text-sm font-extrabold tabular-nums text-gray-900">{v}</p>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 flex gap-3 text-[10px] text-gray-500">
-              <span>
-                <i className="mr-1 inline-block h-2 w-2 rounded-sm bg-violet-200" />
-                결제액(주문일)
-              </span>
-              <span>
-                <i className="mr-1 inline-block h-2 w-2 rounded-sm bg-pi" />
-                확정 매출(확정일)
-              </span>
-            </p>
-            <div className="mt-2 flex h-32 items-end gap-1" role="img" aria-label="최근 14일 일별 결제액과 구매 확정 매출">
-              {daily.map((d) => (
-                <div key={d.day} className="flex h-full flex-1 flex-col justify-end" title={`${d.day} 주문 ${d.orders}건 · 결제 π ${d.paid} · 확정 π ${d.confirmed}`}>
-                  <div className="flex flex-1 items-end gap-px">
-                    <span className="flex-1 rounded-t bg-violet-200" style={{ height: `${(d.paid / max) * 100}%` }} />
-                    <span className="flex-1 rounded-t bg-pi" style={{ height: `${(d.confirmed / max) * 100}%` }} />
-                  </div>
-                  <span className="mt-1 text-center text-[9px] tabular-nums text-gray-400">{Number(d.day.slice(8))}</span>
-                </div>
-              ))}
-            </div>
-            <table className="mt-3 w-full text-[11px] tabular-nums">
-              <thead className="text-gray-400">
-                <tr>
-                  <th className="py-1 text-left font-normal">날짜</th>
-                  <th className="text-right font-normal">주문</th>
-                  <th className="text-right font-normal">결제액</th>
-                  <th className="text-right font-normal">확정 매출</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 text-gray-700">
-                {[...daily]
-                  .reverse()
-                  .filter((d) => d.orders || d.confirmed)
-                  .map((d) => (
-                    <tr key={d.day}>
-                      <td className="py-1">{d.day.slice(5).replace("-", "/")}</td>
-                      <td className="text-right">{d.orders}건</td>
-                      <td className="text-right">π {d.paid}</td>
-                      <td className="text-right font-bold">π {d.confirmed}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-            {daily.every((d) => !d.orders && !d.confirmed) && <p className="py-3 text-center text-xs text-gray-400">최근 14일 주문이 없어요.</p>}
-          </section>
+          <Link href="/admin/stats" className="tap mx-4 mt-1 flex items-center justify-between rounded-xl bg-white px-4 py-3 text-xs font-bold text-gray-700">
+            기간별 거래액·주문·이용자 추이는 매출·통계에서 볼 수 있어요 <span className="text-pi">›</span>
+          </Link>
 
           <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">판매자별 정산</h2>
           {data.sellers.length === 0 ? (

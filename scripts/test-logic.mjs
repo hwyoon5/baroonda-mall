@@ -918,6 +918,37 @@ test("판매자 사업자 승인: 대기 중 게시·구매 차단, 관리자 �
   for (const p of ["/admin", "/admin/orders", "/admin/sellers", "/admin/settlement"]) assert.equal((await fetch(BASE + p)).status, 200, p);
 });
 
+test("매출·통계: 기간별 거래액·주문·이용자, 비교 기간·추이·순위, 관리자만", async () => {
+  const r7 = (n) => Math.round(n * 1e7) / 1e7;
+  const admin = await adminToken();
+  assert.equal((await call("/api/admin/stats")).status, 401);
+  assert.equal((await call("/api/admin/stats", undefined, b1)).status, 403);
+  assert.equal((await call("/api/admin/stats?range=1y", undefined, admin)).status, 400);
+  const t = await ok("/api/admin/stats?range=today", undefined, admin);
+  const { orders } = await ok("/api/admin/orders", undefined, admin);
+  const paid = orders.filter((o) => ["paid", "shipped", "completed", "refunded"].includes(o.status) && Date.parse(o.createdAt) >= Date.parse(t.from));
+  assert.ok(paid.length > 0);
+  assert.equal(t.current.orders, paid.length);
+  assert.equal(t.current.gmv, r7(paid.reduce((a, o) => a + o.amount, 0)));
+  assert.equal(t.current.buyers, new Set(paid.map((o) => o.buyer.uid)).size);
+  assert.equal(t.series.length, 24);
+  assert.equal(r7(t.series.reduce((a, p) => a + p.gmv, 0)), t.current.gmv, "시간대 합계 = 기간 합계");
+  assert.equal(t.previous.orders, 0, "어제 주문 없음");
+  assert.ok(t.current.newUsers > 0 && t.current.avgDau > 0 && t.totals.users >= t.current.newUsers, "로그인 이용자 집계");
+  assert.equal(r7(t.categories.reduce((a, c) => a + c.gmv, 0)), t.current.gmv, "카테고리 합계 = 거래액");
+  assert.ok(t.sellers.length <= 5 && t.products.length <= 5 && t.products[0].gmv >= t.products.at(-1).gmv);
+  const before = t.current.avgDau;
+  await signin("statsvisitor");
+  await signin("statsvisitor");
+  assert.equal((await ok("/api/admin/stats?range=today", undefined, admin)).current.avgDau, before + 1, "하루 한 번만 방문자로 집계");
+  for (const [r, n] of [["7d", 7], ["30d", 30], ["90d", 90]]) {
+    const d = await ok(`/api/admin/stats?range=${r}`, undefined, admin);
+    assert.equal(d.series.length, n, r);
+    assert.equal(d.current.gmv, r7(d.series.reduce((a, p) => a + p.gmv, 0)), r);
+  }
+  assert.equal((await fetch(`${BASE}/admin/stats`)).status, 200);
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

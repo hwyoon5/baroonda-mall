@@ -100,7 +100,7 @@ export default function MyPage() {
             <section className="mt-2 bg-white">
               <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">관리자</h2>
               <ul className="divide-y divide-gray-100">
-                <MenuRow href="/admin" icon="🛡️" label="관리자 대시보드" desc="주문·배송 관리, 판매자 승인, 정산·통계" />
+                <MenuRow href="/admin" icon="🛡️" label="관리자 대시보드" desc="주문·배송, 판매자 승인, 매출·통계, 정산" />
               </ul>
             </section>
           )}

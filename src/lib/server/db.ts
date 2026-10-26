@@ -1,5 +1,6 @@
 import { normalizeCategory } from "@/lib/categories";
 import type { SellerBusiness } from "@/lib/business";
+import { kstDay } from "@/lib/admin";
 import { randomUUID } from "node:crypto";
 import { demoListings } from "../seed";
 import type { ChatMessage, ChatRoom, Listing, Order, PiUser, Review, Short } from "../types";
@@ -94,7 +95,7 @@ function guarded(base: Kv): Kv {
 
 const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : storageMisconfigured ? guarded(memoryKv()) : memoryKv();
 
-const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts", views: "bo:views", config: "bo:config" };
+const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts", views: "bo:views", config: "bo:config", users: "bo:users", dau: "bo:dau" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
 export async function withLock<T>(key: string, fn: () => Promise<T>, ttlMs = 20_000): Promise<T> {
@@ -338,4 +339,26 @@ export async function listShorts(f: { authorUid?: string; includeHidden?: boolea
 export async function takeDailyQuota(kind: string, uid: string, limit: number) {
   const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
   return (await kv.hincr(`bo:quota:${kind}:${day}`, uid)) <= limit;
+}
+
+/** 이용자 기록: 처음·마지막 방문 시각. 하루 첫 방문이면 일별 방문자(bo:dau)를 1 올린다. */
+export type UserRecord = { uid: string; username: string; firstSeenAt: string; lastSeenAt: string };
+
+export async function touchUser(user: PiUser, now = new Date()) {
+  const raw = await kv.hget(K.users, user.uid);
+  const prev = raw ? (JSON.parse(raw) as UserRecord) : undefined;
+  const iso = now.toISOString();
+  const newDay = !prev || kstDay(prev.lastSeenAt) !== kstDay(iso);
+  if (!newDay && prev.username === user.username) return;
+  const rec: UserRecord = { uid: user.uid, username: user.username, firstSeenAt: prev?.firstSeenAt ?? iso, lastSeenAt: iso };
+  await kv.hset(K.users, user.uid, JSON.stringify(rec));
+  if (newDay) await kv.hincr(K.dau, kstDay(iso));
+}
+
+export async function listUsers(): Promise<UserRecord[]> {
+  return (await kv.hvals(K.users)).map((v) => JSON.parse(v) as UserRecord);
+}
+
+export async function dailyVisitors(): Promise<Record<string, number>> {
+  return Object.fromEntries(Object.entries(await kv.hgetall(K.dau)).map(([d, n]) => [d, Number(n)]));
 }

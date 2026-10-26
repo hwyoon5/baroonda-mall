@@ -1,6 +1,6 @@
 import { HttpError, handle, json, readJson } from "@/lib/server/http";
 import { PiApiError, verifyAccessToken } from "@/lib/server/pi";
-import { claimDemoOwner } from "@/lib/server/db";
+import { claimDemoOwner, touchUser } from "@/lib/server/db";
 import { createSessionToken } from "@/lib/server/session";
 
 /** Pi 공식 데모의 POST /user/signin: Pi.authenticate() 결과를 Platform API /v2/me로 검증한다. */
@@ -14,5 +14,6 @@ export const POST = handle(async (req) => {
   });
   if (authResult.user?.uid && authResult.user.uid !== user.uid) throw new HttpError(401, "Pi 사용자 정보가 일치하지 않아요.");
   await claimDemoOwner(user);
+  await touchUser(user).catch(() => undefined);
   return json({ user, token: createSessionToken(user) });
 });
