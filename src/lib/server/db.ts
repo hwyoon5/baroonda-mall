@@ -95,7 +95,7 @@ function guarded(base: Kv): Kv {
 
 const kv: Kv = storageMode === "redis" ? redisKv(redisUrl!, redisToken!) : storageMisconfigured ? guarded(memoryKv()) : memoryKv();
 
-const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts", views: "bo:views", config: "bo:config", users: "bo:users", dau: "bo:dau" };
+const K = { listings: "bo:listings", orders: "bo:orders", payments: "bo:payment-order", chats: "bo:chats", chatIndex: "bo:chat-index", reviews: "bo:reviews", business: "bo:business", shorts: "bo:shorts", views: "bo:views", config: "bo:config", users: "bo:users", dau: "bo:dau", loginCodes: "bo:login-codes", loginAttempts: "bo:login-attempts" };
 
 /** 재고·주문 상태를 바꾸는 구간을 직렬화한다(Redis SET NX 락, 개발용 메모리 락). */
 export async function withLock<T>(key: string, fn: () => Promise<T>, ttlMs = 20_000): Promise<T> {
@@ -345,6 +345,7 @@ export async function takeDailyQuota(kind: string, uid: string, limit: number) {
 export type UserRecord = { uid: string; username: string; firstSeenAt: string; lastSeenAt: string };
 
 export async function touchUser(user: PiUser, now = new Date()) {
+  if (user.uid.startsWith("test-")) return;
   const raw = await kv.hget(K.users, user.uid);
   const prev = raw ? (JSON.parse(raw) as UserRecord) : undefined;
   const iso = now.toISOString();
@@ -361,4 +362,19 @@ export async function listUsers(): Promise<UserRecord[]> {
 
 export async function dailyVisitors(): Promise<Record<string, number>> {
   return Object.fromEntries(Object.entries(await kv.hgetall(K.dau)).map(([d, n]) => [d, Number(n)]));
+}
+
+/** PC 로그인 1회용 코드: 관리자 uid당 최신 코드 1개만 보관(새로 받으면 이전 코드는 무효). 코드는 해시로만 저장한다. */
+export type LoginCode = { hash: string; uid: string; username: string; exp: number; used?: boolean };
+
+export async function saveLoginCode(c: LoginCode) {
+  await kv.hset(K.loginCodes, c.uid, JSON.stringify(c));
+}
+
+export async function listLoginCodes(): Promise<LoginCode[]> {
+  return (await kv.hvals(K.loginCodes)).map((v) => JSON.parse(v) as LoginCode);
+}
+
+export async function countLoginAttempt(bucket: string) {
+  return kv.hincr(K.loginAttempts, bucket);
 }

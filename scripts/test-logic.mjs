@@ -949,6 +949,34 @@ test("매출·통계: 기간별 거래액·주문·이용자, 비교 기간·추
   assert.equal((await fetch(`${BASE}/admin/stats`)).status, 200);
 });
 
+test("PC 로그인: 관리자 1회용 코드, 개발자/테스트 계정", async () => {
+  const admin = await adminToken();
+  assert.equal((await call("/api/admin/pc-code", {})).status, 401);
+  assert.equal((await call("/api/admin/pc-code", {}, b1)).status, 403);
+  const { code } = await ok("/api/admin/pc-code", {}, admin);
+  assert.match(code, /^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  assert.equal((await call("/api/user/code-signin", { code: "AAAA-AAAA" })).status, 401);
+  assert.equal((await call("/api/user/code-signin", { code: "12" })).status, 400);
+  const r = await ok("/api/user/code-signin", { code: code.toLowerCase().replace("-", " ") });
+  assert.equal(r.user.username, "testadmin");
+  assert.equal((await ok("/api/me", undefined, r.token)).isAdmin, true);
+  await ok("/api/admin/stats?range=today", undefined, r.token);
+  assert.equal((await call("/api/user/code-signin", { code })).status, 401, "1회용");
+  const c1 = (await ok("/api/admin/pc-code", {}, admin)).code;
+  const c2 = (await ok("/api/admin/pc-code", {}, admin)).code;
+  assert.equal((await call("/api/user/code-signin", { code: c1 })).status, 401, "새 코드를 받으면 이전 코드 무효");
+  await ok("/api/user/code-signin", { code: c2 });
+
+  assert.deepEqual(await ok("/api/user/test-signin"), { enabled: true, needsSecret: false });
+  const t = await ok("/api/user/test-signin", {});
+  assert.equal(t.user.uid, "test-admin");
+  assert.equal((await ok("/api/me", undefined, t.token)).isAdmin, true);
+  const u = await ok("/api/user/test-signin", { name: "Buyer 1!" });
+  assert.equal(u.user.uid, "test-buyer1");
+  assert.equal((await ok("/api/me", undefined, u.token)).isAdmin, false);
+  assert.equal((await call("/api/admin/stats", undefined, u.token)).status, 403);
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

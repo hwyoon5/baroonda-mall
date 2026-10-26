@@ -17,6 +17,8 @@ export type AuthContextValue = {
   showSignIn: boolean;
   signIn: () => Promise<PiUser | null>;
   signOut: () => Promise<void>;
+  /** PC 코드·테스트 계정 로그인처럼 서버가 바로 세션을 준 경우 */
+  adoptSession: (r: { user: PiUser; token: string }) => void;
   requireAuth: () => void;
   closeSignIn: () => void;
 };
@@ -77,12 +79,18 @@ export function PiProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const adoptSession = useCallback((r: { user: PiUser; token: string }) => {
+    localStorage.setItem(TOKEN_KEY, r.token);
+    setUser(r.user);
+    setShowSignIn(false);
+  }, []);
+
   const requireAuth = useCallback(() => setShowSignIn(true), []);
   const closeSignIn = useCallback(() => setShowSignIn(false), []);
 
   const value = useMemo(
-    () => ({ user, isAuthenticated: Boolean(user), ready, isLoading, error, showSignIn, signIn, signOut, requireAuth, closeSignIn }),
-    [user, ready, isLoading, error, showSignIn, signIn, signOut, requireAuth, closeSignIn],
+    () => ({ user, isAuthenticated: Boolean(user), ready, isLoading, error, showSignIn, signIn, signOut, adoptSession, requireAuth, closeSignIn }),
+    [user, ready, isLoading, error, showSignIn, signIn, signOut, adoptSession, requireAuth, closeSignIn],
   );
 
   return (
