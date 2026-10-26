@@ -1,9 +1,8 @@
 import Link from "next/link";
 import SubHeader from "@/components/SubHeader";
+import { STORE_MAP_URL } from "@/lib/links";
 
 export const metadata = { title: "내주변 매장 · 바로온다" };
-
-const MAP_URL = "https://naver.me/FTdj3KY8";
 
 export default function StoresPage() {
   return (
@@ -18,7 +17,7 @@ export default function StoresPage() {
             <h2 className="mt-2 text-lg font-extrabold">Korea 생태계 매장 지도</h2>
             <p className="mt-1 text-xs leading-relaxed opacity-90">π로 결제할 수 있는 국내 Pi 생태계 매장을 지도에서 찾아보세요. 내 위치 주변 매장과 길찾기를 네이버 지도에서 볼 수 있어요.</p>
             <a
-              href={MAP_URL}
+              href={STORE_MAP_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="tap mt-4 flex items-center justify-center gap-1 rounded-xl bg-white py-3 text-sm font-extrabold text-pi"

@@ -650,7 +650,7 @@ test("하단 메뉴 5칸(거래내역 삭제), 상단 찜 아이콘 → 장바�
   const nav = home.slice(home.lastIndexOf("<nav"), home.indexOf("</nav>", home.lastIndexOf("<nav")));
   assert.equal((nav.match(/<li/g) ?? []).length, 5);
   assert.ok(nav.includes("grid-cols-5") && !nav.includes("거래내역") && !nav.includes('href="/orders"'));
-  assert.ok(nav.includes('href="/stores"') && nav.includes("내주변 매장"), "하단 내주변 매장 탭");
+  assert.ok(nav.includes('href="https://naver.me/FTdj3KY8" target="_blank" rel="noopener noreferrer"') && nav.includes("내주변 매장") && !nav.includes('href="/stores"'), "하단 내주변 매장 탭 → 네이버 지도 새 창");
   assert.ok(home.includes("실시간 BEST") && !home.includes("Korea 생태계 매장 지도"), "홈 상단: 지도 배너 → 실시간 BEST");
   assert.ok(home.includes('href="/categories"'), "카테고리는 상단 헤더에서");
   const stores = await (await fetch(`${BASE}/stores`)).text();
