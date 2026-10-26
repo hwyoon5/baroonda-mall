@@ -691,6 +691,25 @@ test("신규 카테고리 예시 상품: 카테고리별 3개 이상, 카드·�
   }
 });
 
+test("관리자 결제·정산: 운영자만 전체 주문·집계 조회, 일반 사용자 403", async () => {
+  assert.equal((await call("/api/admin/orders")).status, 401);
+  assert.equal((await call("/api/admin/orders", undefined, b1)).status, 403);
+  assert.equal((await ok("/api/me", undefined, b1)).isAdmin, false);
+  const admin = (await ok("/api/user/signin", { authResult: { accessToken: "mock:demoowner", user: { uid: "mock-demoowner", username: "demoowner" } } })).token;
+  assert.equal((await ok("/api/me", undefined, admin)).isAdmin, true);
+  const d = await ok("/api/admin/orders", undefined, admin);
+  assert.ok(d.orders.length > 0 && d.orders.every((o) => o.status !== "created"));
+  assert.ok(d.orders.some((o) => o.buyer.uid !== "mock-demoowner"), "다른 사용자 주문 포함");
+  const r7 = (n) => Math.round(n * 1e7) / 1e7;
+  const sold = d.orders.filter((o) => ["paid", "shipped", "completed"].includes(o.status));
+  assert.equal(d.summary.grossSales, r7(sold.reduce((a, o) => a + o.amount, 0)));
+  assert.equal(d.summary.orderCount, sold.length);
+  assert.equal(d.summary.grossSales, r7(d.summary.escrow + d.summary.confirmedSales));
+  assert.equal(r7(d.sellers.reduce((a, s) => a + s.grossSales, 0)), d.summary.grossSales);
+  assert.ok(d.summary.payoutPaid > 0, "정산 완료 금액 집계");
+  assert.equal((await fetch(`${BASE}/admin`)).status, 200);
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");

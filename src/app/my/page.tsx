@@ -38,12 +38,16 @@ export default function MyPage() {
   const { user, ready, signOut } = useAuth();
   const [mine, setMine] = useState<Listing[] | null>(null);
   const [unread, setUnread] = useState(0);
+  const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     api<{ listings: Listing[] }>("/api/listings?seller=me")
       .then((r) => setMine(r.listings))
       .catch(() => setMine([]));
+    api<{ isAdmin?: boolean }>("/api/me")
+      .then((r) => setAdmin(!!r.isAdmin))
+      .catch(() => undefined);
     api<{ unread: number }>("/api/chats")
       .then((r) => setUnread(r.unread))
       .catch(() => undefined);
@@ -91,6 +95,15 @@ export default function MyPage() {
               <MenuRow href="/my/business" icon="🏢" label="사업자 정보" desc="새 상품(정식 판매) 판매 시 필수 · 통신판매업 신고" />
             </ul>
           </section>
+
+          {admin && (
+            <section className="mt-2 bg-white">
+              <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">관리자</h2>
+              <ul className="divide-y divide-gray-100">
+                <MenuRow href="/admin" icon="🛡️" label="결제·정산 관리" desc="전체 Pi 주문·결제 상태, 매출·정산 집계" />
+              </ul>
+            </section>
+          )}
 
           <section className="mt-2 bg-white">
             <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">구매</h2>
