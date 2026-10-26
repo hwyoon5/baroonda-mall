@@ -14,8 +14,8 @@ function secret() {
 const sign = (payload: string) => createHmac("sha256", secret()).update(payload).digest("base64url");
 
 /** Pi Browser는 앱을 iframe으로 띄울 수 있어 쿠키 대신 Bearer 토큰을 쓴다. */
-export function createSessionToken(user: PiUser) {
-  const payload = Buffer.from(JSON.stringify({ ...user, exp: Date.now() + TTL_MS })).toString("base64url");
+export function createSessionToken(user: PiUser, ttlMs = TTL_MS) {
+  const payload = Buffer.from(JSON.stringify({ ...user, exp: Date.now() + ttlMs })).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 

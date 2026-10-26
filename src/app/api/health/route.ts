@@ -32,6 +32,7 @@ export async function GET() {
     !checks.redis && (storageMisconfigured ? "운영 환경에 Redis 미연결: 저장이 차단됨" : "메모리 저장소 사용 중(개발용)"),
     !checks.mockOff && "PI_MOCK이 켜져 있음: 운영 배포에서는 반드시 끄세요",
     !demoOwner && `예시 상품 운영자 계정 미연결: Pi 계정 @${demoSellerUsername}(으)로 한 번 로그인하세요`,
+    !!process.env.TEST_LOGIN_SECRET && env === "production" && "TEST_LOGIN_SECRET 설정됨: 비밀번호를 아는 사람은 누구나 테스트 관리자로 로그인 가능(정식 오픈 전 삭제)",
     !checks.blob && "BLOB_READ_WRITE_TOKEN 없음: 동영상 업로드 불가, 사진은 판매글에 직접 저장(용량 제한)",
   ].filter(Boolean);
   return json({

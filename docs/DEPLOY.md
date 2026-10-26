@@ -10,6 +10,7 @@ PR을 `main`에 머지하기 전에 아래를 Vercel 프로젝트(`taxitago/baro
 | `PI_API_KEY` | Production, Preview | Pi Developer Portal(Pi Browser → develop.pi) → 내 앱 → API Key | 로그인 검증·결제 승인 불가 |
 | `PI_WALLET_PRIVATE_SEED` | Production(필요 시 Preview) | Developer Portal → 내 앱 → App Wallet 생성 시 받은 비밀 시드(`S…`, 56자) | 판매자 정산·환불(A2U) 불가 |
 | `SESSION_SECRET` | Production, Preview | 임의의 긴 문자열 (`openssl rand -base64 48`) | PI_API_KEY로 서명(키 교체 시 전원 로그아웃) |
+| `TEST_LOGIN_SECRET` | (선택) Preview, 테스트 기간 Production | 임의의 긴 문자열 | 설정하면 관리자 로그인 화면에 '개발자/테스트 계정으로 로그인'이 보이고, 이 비밀번호로 테스트 관리자(`test-admin`)·테스트 사용자로 로그인 가능. 정식 오픈 전 삭제 |
 | `KV_REST_API_URL`, `KV_REST_API_TOKEN` | Production, Preview | 아래 2번 Upstash 연결 시 자동 생성 (`UPSTASH_REDIS_REST_URL/TOKEN`도 인식) | 운영에서는 저장이 차단됨(데이터 유실 방지) |
 | `BLOB_READ_WRITE_TOKEN` | Production, Preview | 아래 2-1 Vercel Blob 연결 시 자동 생성 | 동영상 업로드 불가, 사진은 판매글에 data URL로 저장(장당 약 720px) |
 | `PLATFORM_FEE_PERCENT` | 선택 | 정산 시 차감할 수수료 % (0~30, 기본 0) | 0% |

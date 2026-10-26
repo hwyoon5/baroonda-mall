@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import AdminShell, { useAdminApi } from "@/components/admin/AdminShell";
+import PcCodeCard from "@/components/admin/PcCodeCard";
 import PiPrice from "@/components/PiPrice";
 import { countBy, kstDay, type AdminOrdersData } from "@/lib/admin";
 import type { BusinessReviewStatus } from "@/lib/business";
@@ -92,6 +93,8 @@ export default function AdminDashboard() {
               </ul>
             )}
           </section>
+
+          <PcCodeCard />
         </>
       )}
     </AdminShell>

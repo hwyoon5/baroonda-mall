@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import SubHeader from "@/components/SubHeader";
-import LoginCard from "@/components/pi/LoginCard";
+import AdminLogin from "@/components/admin/AdminLogin";
 import { useAuth } from "@/hooks/useAuth";
 import { api, ApiError } from "@/lib/client/api";
 
@@ -35,13 +35,13 @@ export function useAdminApi<T>(path: string) {
 
 /** 관리자 화면 공통 틀: 로그인 확인, 상단 메뉴, 권한 오류·로딩 표시 */
 export default function AdminShell({ title, error, loading, children }: { title: string; error?: { status?: number; message: string } | null; loading?: boolean; children: ReactNode }) {
-  const { user, ready } = useAuth();
+  const { user, ready, signOut } = useAuth();
   const path = usePathname();
   return (
     <>
       <SubHeader title={`관리자 · ${title}`} />
       {!ready ? null : !user ? (
-        <LoginCard message="관리자 Pi 계정으로 로그인해 주세요." />
+        <AdminLogin />
       ) : error ? (
         <div className="p-10 text-center">
           <p className="text-sm font-bold text-gray-900">{error.status === 403 ? "관리자만 볼 수 있는 페이지예요." : error.message}</p>
@@ -51,6 +51,14 @@ export default function AdminShell({ title, error, loading, children }: { title:
         </div>
       ) : (
         <>
+          {user.uid.startsWith("test-") && (
+            <p className="flex items-center justify-between bg-amber-50 px-4 py-2 text-[11px] text-amber-800">
+              테스트 계정({user.username})으로 로그인 중이에요.
+              <button type="button" onClick={() => void signOut()} className="tap font-bold underline">
+                로그아웃
+              </button>
+            </p>
+          )}
           <nav aria-label="관리자 메뉴" className="no-scrollbar sticky top-14 z-10 flex border-b border-gray-100 bg-white">
             {ADMIN_MENU.map((m) => {
               const active = path === m.href;
