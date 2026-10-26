@@ -253,14 +253,8 @@ export default function SellForm({ draftId }: { draftId?: string }) {
             <FilePicker
               label="동영상 추가"
               accept="video/*"
-              blocked={blobEnabled !== true}
-              onBlocked={() =>
-                showToast(
-                  blobEnabled === null
-                    ? "업로드를 준비하고 있어요. 잠시 후 다시 눌러 주세요."
-                    : "동영상 저장소가 연결되지 않아 지금은 올릴 수 없어요.",
-                )
-              }
+              blocked={blobEnabled === false}
+              onBlocked={() => showToast("동영상 저장소가 연결되지 않아 지금은 올릴 수 없어요.")}
               onFiles={(f) => void addVideo(f[0])}
               className="flex h-20 w-20 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 text-gray-400"
             >

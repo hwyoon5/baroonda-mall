@@ -199,8 +199,8 @@ export default function BusinessPage() {
           <FilePicker
             label={`${label} 첨부`}
             accept="image/jpeg,image/png,image/webp,application/pdf"
-            blocked={blobEnabled === null || !!uploading}
-            onBlocked={() => showToast(uploading ? "다른 파일을 올리고 있어요." : "업로드를 준비하고 있어요.")}
+            blocked={!!uploading}
+            onBlocked={() => showToast("다른 파일을 올리고 있어요.")}
             onFiles={([file]) => attach(key, file)}
             className="flex-1 rounded-lg border border-pi/40 py-3 text-center text-sm font-bold text-pi"
           >
