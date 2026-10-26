@@ -12,7 +12,8 @@ export const ADMIN_MENU = [
   { href: "/admin", label: "대시보드" },
   { href: "/admin/orders", label: "주문·배송" },
   { href: "/admin/sellers", label: "판매자 승인" },
-  { href: "/admin/settlement", label: "정산·통계" },
+  { href: "/admin/stats", label: "매출·통계" },
+  { href: "/admin/settlement", label: "정산" },
 ] as const;
 
 /** 관리자 API 호출. 권한은 서버(requireAdmin)가 확인하고, 화면은 403이면 안내만 보여 준다. */
@@ -54,7 +55,7 @@ export default function AdminShell({ title, error, loading, children }: { title:
             {ADMIN_MENU.map((m) => {
               const active = path === m.href;
               return (
-                <Link key={m.href} href={m.href} aria-current={active ? "page" : undefined} className={`flex-1 shrink-0 whitespace-nowrap px-2 py-3 text-center text-[13px] font-bold ${active ? "border-b-2 border-pi text-pi" : "text-gray-400"}`}>
+                <Link key={m.href} href={m.href} aria-current={active ? "page" : undefined} className={`flex-1 shrink-0 whitespace-nowrap px-2.5 py-3 text-center text-[13px] font-bold ${active ? "border-b-2 border-pi text-pi" : "text-gray-400"}`}>
                   {m.label}
                 </Link>
               );

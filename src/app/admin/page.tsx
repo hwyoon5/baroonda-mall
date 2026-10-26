@@ -55,7 +55,7 @@ export default function AdminDashboard() {
                   ["플랫폼 수수료", d.summary.platformFee, `수수료율 ${d.feePercent}%`],
                 ] as const
               ).map(([t, v, sub]) => (
-                <Link key={t} href="/admin/settlement" className="tap rounded-xl bg-white p-3">
+                <Link key={t} href={t === "오늘 결제" ? "/admin/stats" : "/admin/settlement"} className="tap rounded-xl bg-white p-3">
                   <p className="text-[11px] text-gray-500">{t}</p>
                   <p className="text-lg font-extrabold tabular-nums text-gray-900">π {Math.round(v * 1e7) / 1e7}</p>
                   <p className="text-[10px] text-gray-400">{sub}</p>
