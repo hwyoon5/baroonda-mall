@@ -9,14 +9,18 @@ import LoginCard from "@/components/pi/LoginCard";
 import { useAuth } from "@/hooks/useAuth";
 import { api, ApiError } from "@/lib/client/api";
 import { formatOption } from "@/lib/format";
-import { deliveryStage, orderStageLabel, payoutStatusLabel, refundOpen, type Order } from "@/lib/types";
+import { claimKind, claimKindLabel, claimStatusText, deliveryStage, orderStageLabel, payoutStatusLabel, refundOpen, type Order } from "@/lib/types";
 
 type Settlement = {
-  orderCount: number;
-  grossSales: number;
-  escrow: number;
+  confirmedCount: number;
+  autoConfirmedCount: number;
   confirmedSales: number;
+  settlementAmount: number;
   platformFee: number;
+  escrowCount: number;
+  escrow: number;
+  claimOpen: number;
+  paidTotal: number;
   payoutPaid: number;
   payoutPending: number;
   payoutFailed: number;
@@ -27,7 +31,9 @@ type AdminData = {
   summary: Settlement;
   sellers: (Settlement & { key: string; uid: string; username: string })[];
   feePercent: number;
+  autoConfirmDays: number;
 };
+const day = (iso?: string) => (iso ? new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" }) : "");
 
 const FILTERS: [string, ((o: Order) => boolean) | null][] = [
   ["전체", null],
@@ -36,6 +42,7 @@ const FILTERS: [string, ((o: Order) => boolean) | null][] = [
   ["상품 준비중", (o) => deliveryStage(o) === "preparing"],
   ["배송중", (o) => deliveryStage(o) === "shipping"],
   ["배송 완료", (o) => deliveryStage(o) === "delivered"],
+  ["반품·교환 요청", (o) => refundOpen(o)],
   ["구매 확정", (o) => o.status === "completed"],
   ["취소·환불", (o) => o.status === "cancelled" || o.status === "refunded"],
 ];
@@ -142,6 +149,14 @@ export default function AdminPage() {
                             <span className="block text-[11px] text-gray-400">
                               결제 ID {short(o.paymentId)} · txid {short(o.txid)}
                             </span>
+                            {o.refund && o.refund.status !== "withdrawn" && (
+                              <span className={`block text-[11px] font-bold ${refundOpen(o) ? "text-rose-600" : "text-gray-500"}`}>
+                                {claimKindLabel[claimKind(o.refund)]} · {claimStatusText(o.refund)}
+                              </span>
+                            )}
+                            {o.autoConfirmAt && o.status === "shipped" && !refundOpen(o) && (
+                              <span className="block text-[11px] text-teal-700">{day(o.autoConfirmAt)} 자동 구매 확정 예정</span>
+                            )}
                             {o.fulfillment?.method === "delivery" && (
                               <span className="block text-[11px] font-medium text-sky-700">
                                 {o.fulfillment.carrier} {o.fulfillment.trackingNumber}
@@ -152,7 +167,12 @@ export default function AdminPage() {
                             <PiPrice value={o.amount} size="sm" />
                             <span className={`mt-1 block rounded px-1.5 py-0.5 text-[11px] font-bold ${payClass}`}>결제 {pay}</span>
                             <span className="mt-0.5 block text-[11px] text-gray-500">{orderStageLabel(o)}</span>
-                            {o.status === "completed" && <span className="block text-[11px] text-gray-500">{payoutStatusLabel[o.payout]}</span>}
+                            {o.status === "completed" && (
+                              <span className="block text-[11px] text-gray-500">
+                                {o.confirmedBy === "auto" ? "자동 확정 · " : ""}
+                                {payoutStatusLabel[o.payout]}
+                              </span>
+                            )}
                           </span>
                         </div>
                         {(o.status === "paid" || o.status === "shipped") && !refundOpen(o) && (
@@ -183,10 +203,10 @@ export default function AdminPage() {
               <section className="grid grid-cols-2 gap-2 p-4">
                 {(
                   [
-                    ["총 매출", data.summary.grossSales, `결제 완료 ${data.summary.orderCount}건`, "text-gray-900"],
-                    ["보관 중(구매 확정 전)", data.summary.escrow, "앱 지갑 에스크로", "text-sky-700"],
-                    ["구매 확정 매출", data.summary.confirmedSales, "정산 대상", "text-gray-900"],
+                    ["매출 (구매 확정)", data.summary.confirmedSales, `구매 확정 ${data.summary.confirmedCount}건 · 자동 ${data.summary.autoConfirmedCount}건`, "text-gray-900"],
+                    ["최종 정산 대금", data.summary.settlementAmount, "판매자에게 보낼 금액(수수료 차감)", "text-gray-900"],
                     ["플랫폼 수수료", data.summary.platformFee, `수수료율 ${data.feePercent}%`, "text-pi"],
+                    ["보관 중 (확정 전)", data.summary.escrow, `에스크로 ${data.summary.escrowCount}건 · 반품·교환 ${data.summary.claimOpen}건`, "text-sky-700"],
                     ["정산 완료", data.summary.payoutPaid, "판매자 지갑 송금 완료", "text-emerald-600"],
                     ["정산 대기", data.summary.payoutPending, "송금 대기·진행 중", "text-amber-600"],
                     ["정산 실패", data.summary.payoutFailed, "판매자 재시도 필요", "text-rose-600"],
@@ -201,7 +221,7 @@ export default function AdminPage() {
                 ))}
               </section>
               <p className="px-4 pb-2 text-[11px] text-gray-400">
-                구매자 결제금은 앱 지갑에 보관되고, 구매 확정 시 수수료를 뺀 금액이 판매자에게 정산(Pi A2U)돼요.
+                매출과 정산 대금은 구매 확정된 주문만 집계해요. 구매자 결제금(누적 π {data.summary.paidTotal})은 확정 전까지 앱 지갑에 보관되고, 구매 확정(배송 완료 후 {data.autoConfirmDays}일이 지나면 자동) 시 수수료를 뺀 금액이 판매자에게 정산(Pi A2U)돼요.
               </p>
               <h2 className="px-4 pt-2 text-sm font-extrabold text-gray-900">판매자별 정산</h2>
               {data.sellers.length === 0 ? (
@@ -213,7 +233,10 @@ export default function AdminPage() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-bold text-gray-900">{s.username}</span>
                         <span className="block text-[11px] text-gray-500">
-                          결제 완료 {s.orderCount}건 · 매출 π {s.grossSales}
+                          구매 확정 {s.confirmedCount}건 · 매출 π {s.confirmedSales}
+                        </span>
+                        <span className="block text-[11px] text-gray-400">
+                          정산 대금 π {s.settlementAmount} · 보관 중 π {s.escrow}
                         </span>
                       </span>
                       <span className="shrink-0 text-right text-[11px]">

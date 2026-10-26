@@ -77,7 +77,7 @@ export type ListingStats = {
  * approved → 서버 승인(/approve) 완료, 구매자 서명 대기
  * paid     → 서버 완료(/complete) 완료, 대금은 앱 지갑에 보관(에스크로)
  * shipped  → 판매자 발송/전달
- * completed→ 구매 확정, 판매자 정산(A2U) 대상
+ * completed→ 구매 확정(구매자 직접 또는 배송 완료 후 자동), 판매자 정산(A2U) 대상
  * refunded → 구매 확정 전 환불(A2U로 구매자에게 반환)
  */
 export type OrderStatus = "created" | "approved" | "paid" | "shipped" | "completed" | "cancelled" | "refunded";
@@ -96,14 +96,20 @@ export type A2UTransfer = {
 };
 
 export type PayoutStatus = "none" | "pending" | "processing" | "paid" | "failed";
-export type RefundStatus = "requested" | "rejected" | "withdrawn" | "processing" | "refunded" | "failed";
+export type RefundStatus = "requested" | "rejected" | "withdrawn" | "processing" | "refunded" | "failed" | "exchanged";
+/** cancel: 발송 전 취소(즉시 환불), return: 발송 후 반품·환불, exchange: 발송 후 교환(재발송) */
+export type ClaimKind = "cancel" | "return" | "exchange";
 
 export type Refund = {
   status: RefundStatus;
   /** buyer: 구매자 요청, seller: 판매자 직접 판매 취소 */
   by: "buyer" | "seller";
   reason: string;
+  /** 없으면 예전 데이터: 발송 전이면 cancel, 발송 후면 return으로 본다 */
+  kind?: ClaimKind;
   requestedAt: string;
+  /** 거절·철회·교환 승인 시각 */
+  resolvedAt?: string;
   rejectReason?: string;
   transfer?: A2UTransfer;
 };
@@ -135,6 +141,10 @@ export type Order = {
   payoutTransfer?: A2UTransfer;
   platformFee?: number;
   refund?: Refund;
+  /** 배송 완료 후 이 시각까지 구매 확정·반품/교환 요청이 없으면 자동 구매 확정 */
+  autoConfirmAt?: string;
+  confirmedAt?: string;
+  confirmedBy?: "buyer" | "auto";
   createdAt: string;
   updatedAt: string;
 };
@@ -190,7 +200,15 @@ export const refundStatusLabel: Record<RefundStatus, string> = {
   processing: "환불 송금 중",
   refunded: "환불 완료",
   failed: "환불 송금 실패",
+  exchanged: "교환 승인",
 };
+
+export const claimKindLabel: Record<ClaimKind, string> = { cancel: "주문 취소", return: "반품·환불", exchange: "교환" };
+export const claimKind = (r: Pick<Refund, "kind" | "by">): ClaimKind => r.kind ?? (r.by === "seller" ? "cancel" : "return");
+export function claimStatusText(r: Refund) {
+  if (claimKind(r) !== "exchange") return refundStatusLabel[r.status];
+  return { requested: "교환 요청됨", rejected: "교환 거절됨", withdrawn: "교환 요청 철회", exchanged: "교환 승인 · 재발송" }[r.status as string] ?? refundStatusLabel[r.status];
+}
 
 /** 환불 송금이 진행 중이거나 판매자 응답을 기다리는 상태 (이때는 발송·구매 확정을 막는다) */
 export const refundOpen = (o: Pick<Order, "refund">) => ["requested", "processing", "failed"].includes(o.refund?.status ?? "");

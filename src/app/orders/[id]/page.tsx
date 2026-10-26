@@ -48,10 +48,11 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       const r = await api<{ order: Order }>(`/api/orders/${id}`, { action, ...extra });
       setOrder(r.order);
       const done: Record<string, string> = {
-        confirm: "구매를 확정했어요.",
-        refund_request: r.order.status === "refunded" ? "주문을 취소하고 π를 환불했어요." : "환불을 요청했어요.",
-        refund_withdraw: "환불 요청을 철회했어요.",
-        refund_reject: "환불 요청을 거절했어요.",
+        confirm: "구매를 확정했어요. 판매자에게 정산돼요.",
+        refund_request: r.order.status === "refunded" ? "주문을 취소하고 π를 환불했어요." : "신청했어요. 판매자 응답을 기다려 주세요.",
+        refund_withdraw: "요청을 철회했어요.",
+        refund_reject: "요청을 거절했어요.",
+        refund_approve: r.order.refund?.status === "exchanged" ? "교환을 승인했어요. 새 상품을 보내고 송장을 수정해 주세요." : "환불했어요.",
       };
       const failed = r.order.refund?.status === "failed" || r.order.payout === "failed";
       showToast(failed ? "π 송금에 실패했어요. 잠시 후 다시 시도해 주세요." : (done[action] ?? "처리했어요."));
@@ -154,6 +155,12 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
                 )}
               </p>
             )}
+            {order.status === "completed" && order.confirmedAt && (
+              <p>
+                <span className="inline-block w-20 text-gray-500">구매 확정</span>
+                {time(order.confirmedAt)} {order.confirmedBy === "auto" ? "(배송 완료 후 자동 확정)" : "(구매자 확정)"}
+              </p>
+            )}
             {order.txid && (
               <p className="break-all">
                 <span className="inline-block w-20 text-gray-500">거래 ID</span>
@@ -170,10 +177,22 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
             {isSeller && (order.status === "paid" || order.status === "shipped") && !refundOpen(order) && (
               <DeliveryControl key={`${order.status}-${order.updatedAt}`} order={order} onSaved={setOrder} />
             )}
-            {isBuyer && (order.status === "paid" || order.status === "shipped") && !refundOpen(order) && (
-              <button type="button" disabled={busy} onClick={() => act("confirm")} className="tap w-full rounded-xl bg-pi py-3 text-sm font-bold text-white disabled:opacity-60">
-                물건 잘 받았어요 (구매 확정)
-              </button>
+            {isBuyer && order.status === "shipped" && !refundOpen(order) && (
+              <div className={`rounded-xl p-3 ${deliveryStage(order) === "delivered" ? "border border-pi/30 bg-pi/5" : ""}`}>
+                {deliveryStage(order) === "delivered" && (
+                  <p className="mb-2 text-xs text-gray-700">
+                    <b className="text-gray-900">배송이 완료됐어요.</b> 상품을 확인하고 구매 확정해 주세요.
+                    {order.autoConfirmAt && ` ${time(order.autoConfirmAt)}까지 확정이나 반품·교환 신청이 없으면 자동으로 구매 확정돼요.`}
+                  </p>
+                )}
+                <button type="button" disabled={busy} onClick={() => act("confirm")} className="tap w-full rounded-xl bg-pi py-3 text-sm font-bold text-white disabled:opacity-60">
+                  물건 잘 받았어요 (구매 확정)
+                </button>
+                <p className="mt-1 text-center text-[11px] text-gray-400">구매 확정 후에는 반품·교환·환불을 신청할 수 없어요.</p>
+              </div>
+            )}
+            {isSeller && order.status === "shipped" && order.autoConfirmAt && !refundOpen(order) && (
+              <p className="text-center text-[11px] text-gray-500">{time(order.autoConfirmAt)}에 자동 구매 확정되고 정산돼요.</p>
             )}
           </div>
         </>

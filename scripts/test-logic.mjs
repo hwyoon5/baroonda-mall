@@ -256,6 +256,8 @@ test("정산(A2U): 구매 확정 시 판매자에게 1회 송금, 동시 확정�
   const { listing: l } = await ok("/api/listings", { ...newBase, title: "정산 테스트", pricePi: 2.5, stock: 3 }, seller);
   const order = await buy(b1, l.id);
   assert.equal((await act(order.id, "payout_retry", seller)).status, 409);
+  assert.equal((await act(order.id, "confirm", b1)).status, 409, "발송 전에는 에스크로 해제 불가");
+  await ok(`/api/orders/${order.id}`, { action: "ship", method: "direct" }, seller);
   const res = await Promise.all([act(order.id, "confirm", b1), act(order.id, "confirm", b1)]);
   assert.deepEqual(res.map((r) => r.status).sort(), [200, 409]);
   const o = res.find((r) => r.status === 200).data.order;
@@ -274,6 +276,7 @@ test("정산 실패 → 주문은 구매 확정 유지, 판매자 재시도로 �
   await ok("/api/me/business", biz, flaky, "PUT");
   const { listing: l } = await ok("/api/listings", { ...newBase, title: "정산 재시도", stock: 1 }, flaky);
   const order = await buy(b1, l.id);
+  await ok(`/api/orders/${order.id}`, { action: "ship", method: "direct" }, flaky);
   let o = (await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1)).order;
   assert.equal(o.status, "completed");
   assert.equal(o.payout, "failed");
@@ -702,10 +705,13 @@ test("관리자 결제·정산: 운영자만 전체 주문·집계 조회, 일�
   assert.ok(d.orders.some((o) => o.buyer.uid !== "mock-demoowner"), "다른 사용자 주문 포함");
   const r7 = (n) => Math.round(n * 1e7) / 1e7;
   const sold = d.orders.filter((o) => ["paid", "shipped", "completed"].includes(o.status));
-  assert.equal(d.summary.grossSales, r7(sold.reduce((a, o) => a + o.amount, 0)));
-  assert.equal(d.summary.orderCount, sold.length);
-  assert.equal(d.summary.grossSales, r7(d.summary.escrow + d.summary.confirmedSales));
-  assert.equal(r7(d.sellers.reduce((a, s) => a + s.grossSales, 0)), d.summary.grossSales);
+  const done = sold.filter((o) => o.status === "completed");
+  assert.equal(d.summary.confirmedSales, r7(done.reduce((a, o) => a + o.amount, 0)), "매출은 구매 확정 기준");
+  assert.equal(d.summary.confirmedCount, done.length);
+  assert.equal(d.summary.settlementAmount, r7(d.summary.confirmedSales - d.summary.platformFee));
+  assert.equal(d.summary.paidTotal, r7(d.summary.escrow + d.summary.confirmedSales));
+  assert.equal(d.summary.escrowCount, sold.length - done.length);
+  assert.equal(r7(d.sellers.reduce((a, s) => a + s.confirmedSales, 0)), d.summary.confirmedSales);
   assert.ok(d.summary.payoutPaid > 0, "정산 완료 금액 집계");
   assert.equal((await fetch(`${BASE}/admin`)).status, 200);
 });
@@ -772,6 +778,97 @@ test("상품 구매 후기: 배송 완료·구매 확정 구매자만 작성, �
   assert.equal((await call(`/api/listings/nope-xyz/reviews`)).status, 404);
   const html = (await (await fetch(`${BASE}/listings/${l.id}`)).text()).replace(/<!-- -->/g, "");
   assert.ok(html.includes("구매 후기") && html.includes("후기 2개") && html.includes("3.5"), "상세 페이지 후기 영역");
+});
+
+test("에스크로: 배송 완료 후 구매 확정·7일 자동 확정·반품/교환, 확정분만 정산 집계", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "에스크로 상품", pricePi: 3, stock: 9 }, seller);
+  const admin = (await ok("/api/user/signin", { authResult: { accessToken: "mock:demoowner", user: { uid: "mock-demoowner", username: "demoowner" } } })).token;
+  const ship = (id, extra = {}) => ok(`/api/orders/${id}`, { action: "delivery", stage: "shipping", carrier: "CJ대한통운", trackingNumber: "123412341234", ...extra }, seller);
+  const deliver = (id, at) => ok(`/api/orders/${id}`, { action: "delivery", stage: "delivered", ...(at ? { testDeliveredAt: at } : {}) }, seller);
+  const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString();
+  const sellerKey = (await ok("/api/orders", undefined, seller)).sales[0]?.seller.uid;
+  const before = (await ok("/api/admin/orders", undefined, admin)).summary;
+
+  // 1) 구매자 직접 확정: 배송 완료 → 자동 확정 기한 7일 표시 → 확정 → 정산
+  const o1 = await buy(b1, l.id);
+  await ship(o1.id);
+  let o = (await deliver(o1.id)).order;
+  const left = (Date.parse(o.autoConfirmAt) - Date.parse(o.fulfillment.deliveredAt)) / 86400000;
+  assert.equal(Math.round(left), 7, "배송 완료 후 7일");
+  o = (await ok(`/api/orders/${o1.id}`, { action: "confirm" }, b1)).order;
+  assert.deepEqual([o.status, o.confirmedBy, o.payout, !!o.confirmedAt], ["completed", "buyer", "paid", true]);
+
+  // 2) 자동 확정: 8일 전 배송 완료 → 구매자가 주문을 열면 확정, 정산은 응답 뒤 자동
+  const o2 = await buy(b2, l.id);
+  await ship(o2.id);
+  await deliver(o2.id, daysAgo(8));
+  o = (await ok(`/api/orders/${o2.id}`, undefined, b2)).order;
+  assert.deepEqual([o.status, o.confirmedBy], ["completed", "auto"], "기한 지나면 자동 구매 확정");
+  for (let i = 0; i < 20 && o.payout !== "paid"; i++) {
+    await new Promise((r) => setTimeout(r, 250));
+    o = (await ok(`/api/orders/${o2.id}`, undefined, b2)).order;
+  }
+  assert.equal(o.payout, "paid", "자동 확정 후 판매자 정산");
+  assert.equal((await act(o2.id, "refund_request", b2, { reason: "늦게 확인" })).status, 409, "확정 후 반품 불가");
+
+  // 3) 기한 전에는 자동 확정 안 됨
+  const o3 = await buy(b1, l.id);
+  await ship(o3.id);
+  await deliver(o3.id, daysAgo(6));
+  assert.equal((await ok(`/api/orders/${o3.id}`, undefined, b1)).order.status, "shipped");
+
+  // 4) 반품 요청 중에는 자동 확정 멈춤 → 거절되면 기한이 새로 시작
+  assert.equal((await act(o3.id, "refund_request", b1, { kind: "return" })).status, 400, "사유 필수");
+  o = (await ok(`/api/orders/${o3.id}`, { action: "refund_request", kind: "return", reason: "상품 하자" }, b1)).order;
+  assert.deepEqual([o.refund.kind, o.refund.status], ["return", "requested"]);
+  assert.equal((await act(o3.id, "confirm", b1)).status, 409, "요청 중 확정 불가");
+  assert.equal((await act(o3.id, "delivery", seller, { stage: "shipping" })).status, 409, "요청 중 배송 변경 불가");
+  o = (await ok(`/api/orders/${o3.id}`, { action: "refund_reject", reason: "정상 제품" }, seller)).order;
+  assert.ok(Date.parse(o.autoConfirmAt) > Date.now() + 6.9 * 86400000, "거절 후 자동 확정 기한 재시작");
+  assert.ok(o.refund.resolvedAt);
+
+  // 5) 교환: 승인 → π 이동 없음, 배송중으로 돌아가 재발송 → 새 송장·배송 완료로 기한 재시작
+  const o4 = await buy(b2, l.id);
+  assert.equal((await ok(`/api/orders/${o4.id}`, { action: "refund_request", kind: "exchange", reason: "x" }, b2)).order.refund.kind, "cancel", "발송 전은 즉시 취소");
+  const o5 = await buy(b2, l.id);
+  await ship(o5.id);
+  await deliver(o5.id, daysAgo(2));
+  await ok(`/api/orders/${o5.id}`, { action: "refund_request", kind: "exchange", reason: "사이즈 교환" }, b2);
+  o = (await ok(`/api/orders/${o5.id}`, { action: "refund_approve" }, seller)).order;
+  assert.deepEqual([o.status, o.refund.status, o.fulfillment.deliveredAt, o.autoConfirmAt, o.refund.transfer], ["shipped", "exchanged", undefined, undefined, undefined]);
+  o = (await ship(o5.id, { trackingNumber: "999988887777" })).order;
+  assert.equal(o.fulfillment.trackingNumber, "999988887777");
+  o = (await deliver(o5.id)).order;
+  assert.ok(Date.parse(o.autoConfirmAt) > Date.now() + 6.9 * 86400000);
+
+  // 6) 반품 승인 → 환불
+  const o6 = await buy(b1, l.id);
+  await ship(o6.id);
+  await ok(`/api/orders/${o6.id}`, { action: "refund_request", kind: "return", reason: "불량" }, b1);
+  assert.equal((await ok(`/api/orders/${o6.id}`, { action: "refund_approve" }, seller)).order.status, "refunded");
+
+  // 7) 예약 작업(cron): 관리자만, 기한 지난 주문 확정·정산
+  const o7 = await buy(b1, l.id);
+  await ship(o7.id);
+  await deliver(o7.id, daysAgo(10));
+  assert.equal((await call("/api/cron/escrow")).status, 401);
+  assert.equal((await call("/api/cron/escrow", undefined, b1)).status, 403);
+  const job = await ok("/api/cron/escrow", undefined, admin);
+  assert.ok(job.confirmed.includes(o7.id));
+  assert.ok(job.results.some((r) => r.id === o7.id && r.payout === "paid"));
+  o = (await ok(`/api/orders/${o7.id}`, undefined, b1)).order;
+  assert.deepEqual([o.status, o.confirmedBy, o.payout], ["completed", "auto", "paid"]);
+
+  // 8) 관리자 집계: 확정 3건(9π)만 매출, 미확정(o3·o5)은 보관 중
+  const after = (await ok("/api/admin/orders", undefined, admin)).summary;
+  const r7 = (n) => Math.round(n * 1e7) / 1e7;
+  assert.equal(r7(after.confirmedSales - before.confirmedSales), 9);
+  assert.equal(after.confirmedCount - before.confirmedCount, 3);
+  assert.equal(after.autoConfirmedCount - before.autoConfirmedCount, 2);
+  assert.equal(r7(after.escrow - before.escrow), 6);
+  assert.ok(sellerKey === undefined || typeof sellerKey === "string");
+  const html = (await (await fetch(`${BASE}/admin`)).text());
+  assert.ok(html.length > 0);
 });
 
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {

@@ -1,6 +1,7 @@
-import { getListing, getOrder, saveListing, saveOrder, withLock } from "@/lib/server/db";
-import { listingLock, orderLock } from "@/lib/server/orders";
-import { payoutOrder, refundOrder } from "@/lib/server/settlement";
+import { getOrder, saveOrder, withLock } from "@/lib/server/db";
+import { orderLock } from "@/lib/server/orders";
+import { piMock } from "@/lib/server/pi";
+import { autoConfirmAtFrom, confirmOrder, payoutOrder, refundOrder, withAutoConfirm } from "@/lib/server/settlement";
 import { carriers, isTrackingNumber, refundOpen, type Order, type PiUser } from "@/lib/types";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
 import { isAdmin } from "@/lib/server/admin";
@@ -9,7 +10,7 @@ import { isAdmin } from "@/lib/server/admin";
 export const maxDuration = 60;
 
 type Ctx = { params: Promise<{ id: string }> };
-type Body = { action?: string; method?: string; carrier?: string; trackingNumber?: string; reason?: string; stage?: string };
+type Body = { action?: string; method?: string; carrier?: string; trackingNumber?: string; reason?: string; stage?: string; kind?: string; testDeliveredAt?: string };
 
 async function load(req: Request, { params }: Ctx) {
   const user = requireUser(req);
@@ -18,7 +19,8 @@ async function load(req: Request, { params }: Ctx) {
   if (!order || (order.buyer.uid !== user.uid && order.seller.uid !== user.uid && !isAdmin(user))) {
     throw new HttpError(404, "주문을 찾을 수 없어요.");
   }
-  return { user, order };
+  const [current] = await withAutoConfirm([order]);
+  return { user, order: current };
 }
 
 export const GET = handle<Ctx>(async (req, ctx) => json({ order: (await load(req, ctx)).order }));
@@ -72,40 +74,43 @@ async function transition(order: Order, user: PiUser, b: Body): Promise<"payout"
       } else {
         throw new HttpError(409, "결제 완료 또는 배송중인 주문만 배송 상태를 바꿀 수 있어요.");
       }
-      if (b.stage === "delivered") order.fulfillment.deliveredAt ??= now;
-      else delete order.fulfillment.deliveredAt;
+      if (b.stage === "delivered") {
+        // 로컬 모의 결제에서만: 자동 구매 확정 테스트용으로 과거 배송 완료 시각을 받는다.
+        const at = piMock && b.testDeliveredAt && !Number.isNaN(Date.parse(b.testDeliveredAt)) ? new Date(b.testDeliveredAt).toISOString() : now;
+        order.fulfillment.deliveredAt ??= at;
+        order.autoConfirmAt ??= autoConfirmAtFrom(order.fulfillment.deliveredAt);
+      } else {
+        delete order.fulfillment.deliveredAt;
+        delete order.autoConfirmAt;
+      }
       return null;
     }
     case "confirm": {
       if (!isBuyer) throw new HttpError(403, "구매자만 구매 확정할 수 있어요.");
-      if (!open) throw new HttpError(409, "구매 확정할 수 없는 상태예요.");
-      if (refundOpen(order)) throw new HttpError(409, "진행 중인 환불 요청을 먼저 철회해 주세요.");
-      order.status = "completed";
-      order.payout = "pending";
-      await withLock(listingLock(order.listingId), async () => {
-        const listing = await getListing(order.listingId);
-        if (!listing) return;
-        if (listing.condition === "new") listing.soldCount = (listing.soldCount ?? 0) + 1;
-        else listing.status = "sold";
-        await saveListing(listing);
-      });
+      // 에스크로: 상품이 발송되기 전에는 판매대금을 풀지 않는다.
+      if (order.status !== "shipped") throw new HttpError(409, order.status === "paid" ? "상품이 발송된 뒤에 구매 확정할 수 있어요." : "구매 확정할 수 없는 상태예요.");
+      if (refundOpen(order)) throw new HttpError(409, "진행 중인 반품·교환·환불 요청을 먼저 철회해 주세요.");
+      await confirmOrder(order, "buyer");
       return "payout";
     }
     case "refund_request": {
       if (!isBuyer) throw new HttpError(403, "구매자만 환불을 요청할 수 있어요.");
       if (!open) throw new HttpError(409, "구매 확정 전 주문만 환불을 요청할 수 있어요.");
       if (refundOpen(order)) throw new HttpError(409, "이미 환불이 진행 중이에요.");
-      const reason = text(b.reason, 300);
-      if (!reason) throw new HttpError(400, "환불 사유를 입력해 주세요.");
-      // 쿠팡식: 발송 전 취소는 바로 환불, 발송 후에는 판매자 승인 필요
+      // 쿠팡식: 발송 전 취소는 바로 환불, 발송 후 반품·교환은 판매자 승인 필요
       const auto = order.status === "paid";
-      order.refund = { status: auto ? "processing" : "requested", by: "buyer", reason, requestedAt: now };
+      const kind = auto ? "cancel" : b.kind === "exchange" ? "exchange" : "return";
+      const reason = text(b.reason, 300);
+      if (!reason) throw new HttpError(400, `${kind === "exchange" ? "교환" : kind === "return" ? "반품" : "취소"} 사유를 입력해 주세요.`);
+      order.refund = { status: auto ? "processing" : "requested", by: "buyer", kind, reason, requestedAt: now };
       return auto ? "refund" : null;
     }
     case "refund_withdraw": {
       if (!isBuyer) throw new HttpError(403, "구매자만 철회할 수 있어요.");
       if (order.refund?.status !== "requested") throw new HttpError(409, "철회할 환불 요청이 없어요.");
       order.refund.status = "withdrawn";
+      order.refund.resolvedAt = now;
+      if (order.fulfillment?.deliveredAt) order.autoConfirmAt = autoConfirmAtFrom(now);
       return null;
     }
     case "refund_reject": {
@@ -113,11 +118,22 @@ async function transition(order: Order, user: PiUser, b: Body): Promise<"payout"
       if (order.refund?.status !== "requested") throw new HttpError(409, "처리할 환불 요청이 없어요.");
       order.refund.status = "rejected";
       order.refund.rejectReason = text(b.reason, 300) || undefined;
+      order.refund.resolvedAt = now;
+      // 분쟁이 끝난 뒤 구매자가 다시 확인할 수 있도록 자동 확정 기한을 새로 잡는다.
+      if (order.fulfillment?.deliveredAt) order.autoConfirmAt = autoConfirmAtFrom(now);
       return null;
     }
     case "refund_approve": {
       if (!isSeller) throw new HttpError(403, "판매자만 처리할 수 있어요.");
       if (order.refund?.status !== "requested") throw new HttpError(409, "처리할 환불 요청이 없어요.");
+      if (order.refund.kind === "exchange") {
+        // 교환: π는 그대로 보관하고, 판매자가 새 상품을 다시 보내면(송장 수정 → 배송 완료) 자동 확정 기한이 다시 시작된다.
+        order.refund.status = "exchanged";
+        order.refund.resolvedAt = now;
+        if (order.fulfillment) delete order.fulfillment.deliveredAt;
+        delete order.autoConfirmAt;
+        return null;
+      }
       order.refund.status = "processing";
       return "refund";
     }
