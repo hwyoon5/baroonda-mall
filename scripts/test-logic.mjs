@@ -650,11 +650,12 @@ test("하단 메뉴 5칸(거래내역 삭제), 상단 찜 아이콘 → 장바�
   const nav = home.slice(home.lastIndexOf("<nav"), home.indexOf("</nav>", home.lastIndexOf("<nav")));
   assert.equal((nav.match(/<li/g) ?? []).length, 5);
   assert.ok(nav.includes("grid-cols-5") && !nav.includes("거래내역") && !nav.includes('href="/orders"'));
-  assert.ok(nav.includes('href="https://pages.map.naver.com/save-pages/web/detail-list/32fa173c12ac4cfb970e682d2d2818b3" target="_blank" rel="noopener noreferrer"') && nav.includes("생태계 매장") && !nav.includes('href="/stores"'), "하단 생태계 매장 탭 → 네이버 지도 새 창");
+  assert.ok(nav.includes('href="/stores"') && nav.includes("생태계 매장") && !nav.includes("pages.map.naver.com"), "하단 생태계 매장 탭 → 안내 페이지(/stores)");
   assert.ok(home.includes("실시간 BEST") && !home.includes("Korea 생태계 매장 지도"), "홈 상단: 지도 배너 → 실시간 BEST");
   assert.ok(home.includes('href="/categories"'), "카테고리는 상단 헤더에서");
   const stores = await (await fetch(`${BASE}/stores`)).text();
-  assert.ok(stores.includes("Korea 생태계 매장 지도") && stores.includes("https://pages.map.naver.com/save-pages/web/detail-list/32fa173c12ac4cfb970e682d2d2818b3"));
+  assert.ok(stores.includes("Korea 생태계 매장 지도") && stores.includes("https://pages.map.naver.com/save-pages/web/detail-list/32fa173c12ac4cfb970e682d2d2818b3"), "안내 페이지 버튼만 네이버 지도 연결");
+  assert.ok(stores.includes("매장을 운영하시나요?") && stores.includes("지금 판매 시작하기"), "안내 페이지 하단 판매 시작 버튼");
   const guide = await fetch(`${BASE}/my/guide`);
   assert.equal(guide.status, 200);
   assert.ok((await guide.text()).includes("파이 결제 가이드"));

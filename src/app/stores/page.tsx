@@ -1,5 +1,5 @@
-import Link from "next/link";
 import SubHeader from "@/components/SubHeader";
+import StartSellingButton from "@/components/StartSellingButton";
 import StoreMapLink from "@/components/StoreMapLink";
 
 export const metadata = { title: "생태계 매장 · 바로온다" };
@@ -41,15 +41,11 @@ export default function StoresPage() {
         </section>
 
         <section className="bg-white px-4 py-4">
-          <Link href="/sell" className="tap flex items-center justify-between rounded-xl border border-gray-100 p-3">
-            <span>
-              <b className="block text-sm text-gray-900">매장을 운영하시나요?</b>
-              <span className="text-[11px] text-gray-500">바로온다에 상품을 올리고 온라인에서도 π로 판매해 보세요.</span>
-            </span>
-            <span className="text-gray-300" aria-hidden>
-              ›
-            </span>
-          </Link>
+          <div className="rounded-xl border border-gray-100 p-3">
+            <b className="block text-sm text-gray-900">매장을 운영하시나요?</b>
+            <span className="text-[11px] text-gray-500">바로온다에 상품을 올리고 온라인에서도 π로 판매해 보세요.</span>
+            <StartSellingButton />
+          </div>
         </section>
       </main>
     </>
