@@ -36,6 +36,7 @@ interface PiSDK {
   init(config: { version: string; sandbox?: boolean }): void;
   authenticate(scopes: PiScope[], onIncompletePaymentFound: (payment: PiPaymentDTO) => void): Promise<PiAuthResult>;
   createPayment(data: PiPaymentData, callbacks: PiPaymentCallbacks): void;
+  openUrlInSystemBrowser?(url: string): Promise<void>;
 }
 
 interface Window {

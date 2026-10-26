@@ -121,7 +121,7 @@ export default function MyPage() {
           <h2 className="px-4 pt-4 text-sm font-extrabold text-gray-900">이용 안내</h2>
           <ul className="divide-y divide-gray-100">
             <MenuRow href="/my/guide" icon="📘" label="파이 결제 가이드" desc="Pi Browser 로그인 → π 결제 → 구매 확정까지" />
-            <MenuRow href="/stores" icon="🗺️" label="내주변 매장" desc="π 결제 가능한 생태계 매장 지도" />
+            <MenuRow href="/stores" icon="🗺️" label="생태계 매장" desc="π 결제 가능한 생태계 매장 지도" />
           </ul>
         </section>
       )}

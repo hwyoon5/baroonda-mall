@@ -1,6 +1,9 @@
 /** 판매글 사진·동영상 규칙. 클라이언트(SellForm)와 서버(listing-input, /api/upload)가 같이 쓴다. */
 export const MAX_PHOTOS = 10;
-export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+/** 저장소에 올라가는 사진 1장 최대 용량(기기에서 1280px JPEG로 줄인 뒤 기준). */
+export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+/** 기기에서 고를 수 있는 원본 사진 최대 용량. 원본은 서버로 보내지 않고 기기에서 줄여 올린다. */
+export const MAX_PHOTO_SOURCE_BYTES = 20 * 1024 * 1024;
 export const MAX_VIDEOS = 2;
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const MAX_VIDEO_SECONDS = 60;
