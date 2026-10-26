@@ -25,6 +25,11 @@ export default function SearchHeader({ initialQuery = "" }: { initialQuery?: str
           바로온다
         </Link>
         <div className="flex items-center text-white">
+          <Link href="/categories" aria-label="전체 카테고리" className="tap rounded-full p-1.5">
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
+              <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" />
+            </svg>
+          </Link>
           <CartLink className="p-1.5" />
           <Link href="/my" aria-label="마이페이지" className="tap rounded-full p-1.5">
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
