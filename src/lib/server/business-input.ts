@@ -1,4 +1,4 @@
-import { MAX_POLICY_CHARS, digitsOnly, normalizeShipping, isBizPhone, isPiWallet, isBizRegNo, isEmail, isMailOrderNo, normalizeMailOrderNo, type SellerBusiness } from "@/lib/business";
+import { MAX_POLICY_CHARS, businessStatus, digitsOnly, normalizeShipping, isBizPhone, isPiWallet, isBizRegNo, isEmail, isMailOrderNo, normalizeMailOrderNo, type SellerBusiness } from "@/lib/business";
 import { isBlobUrl } from "@/lib/media";
 import { getBusiness } from "./db";
 import { HttpError } from "./http";
@@ -60,8 +60,13 @@ export function parseBusinessInput(b: Partial<Record<keyof SellerBusiness, unkno
   };
 }
 
-/** 새 상품(정식 판매) 게시 전 확인: 사업자 정보가 등록된 판매자만 가능. 개인 중고·임시저장은 제외. */
+/** 새 상품(정식 판매) 게시 전 확인: 관리자 승인을 받은 사업자만 가능. 개인 중고·임시저장은 제외. */
 export async function assertCanPublish(uid: string, condition: string, draft: boolean) {
   if (draft || condition !== "new") return;
-  if (!(await getBusiness(uid))) throw new HttpError(403, "새 상품(정식 판매)은 사업자 정보를 등록한 뒤 판매할 수 있어요. 마이 > 사업자 정보에서 등록해 주세요.");
+  const b = await getBusiness(uid);
+  if (!b) throw new HttpError(403, "새 상품(정식 판매)은 사업자 정보를 등록한 뒤 판매할 수 있어요. 마이 > 사업자 정보에서 등록해 주세요.");
+  const status = businessStatus(b);
+  if (status === "pending") throw new HttpError(403, "사업자 정보를 확인하고 있어요. 관리자 승인 후 새 상품을 판매할 수 있어요. 작성 중인 상품은 임시저장해 두세요.");
+  if (status === "rejected")
+    throw new HttpError(403, `사업자 정보가 반려됐어요${b.review?.reason ? ` (사유: ${b.review.reason})` : ""}. 마이 > 사업자 정보에서 고쳐 다시 제출해 주세요.`);
 }

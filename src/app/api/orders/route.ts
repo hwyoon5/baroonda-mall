@@ -1,4 +1,4 @@
-import { addPi, effectiveShipping, shippingFeeFor } from "@/lib/business";
+import { addPi, businessStatus, effectiveShipping, shippingFeeFor } from "@/lib/business";
 import { getBusiness, getListing, isUnclaimedDemo, listOrdersFor, newId, saveOrder } from "@/lib/server/db";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
 import { formatOption } from "@/lib/format";
@@ -45,7 +45,9 @@ export const POST = handle(async (req) => {
   const delivery = listing.tradeMethods.includes("delivery");
   if (pickup === true && !listing.tradeMethods.includes("direct")) throw new HttpError(400, "직거래를 지원하지 않는 상품이에요.");
   const shipped = delivery && pickup !== true;
-  const terms = shipped && listing.condition === "new" ? effectiveShipping(listing, await getBusiness(listing.seller.uid)) : undefined;
+  const sellerBiz = listing.condition === "new" ? await getBusiness(listing.seller.uid) : undefined;
+  if (sellerBiz && businessStatus(sellerBiz) !== "approved") throw new HttpError(409, "판매자 정보를 확인 중인 상품이라 지금은 구매할 수 없어요.");
+  const terms = shipped && listing.condition === "new" ? effectiveShipping(listing, sellerBiz) : undefined;
   const shippingFee = shippingFeeFor(terms, listing.pricePi, remoteArea === true);
 
   const now = new Date().toISOString();

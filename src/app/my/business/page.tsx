@@ -9,7 +9,7 @@ import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useStore } from "@/components/store/StoreProvider";
 import { useAuth } from "@/hooks/useAuth";
-import { DEFAULT_POLICY, MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, isPiWallet, normalizeShipping, toShippingDraft, type SellerBusiness, type ShippingDraft } from "@/lib/business";
+import { DEFAULT_POLICY, MAX_POLICY_CHARS, businessStatus, type BusinessReview, POLICY_FIELDS, formatBizRegNo, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, isPiWallet, normalizeShipping, toShippingDraft, type SellerBusiness, type ShippingDraft } from "@/lib/business";
 import { api } from "@/lib/client/api";
 import { TEST_BUSINESS, TEST_SHIPPING, dummyImage } from "@/lib/client/dummy";
 import { canvasToJpeg, resizeImage, uploadMedia } from "@/lib/client/media";
@@ -50,6 +50,7 @@ export default function BusinessPage() {
   const [f, setF] = useState<Form>(empty);
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [review, setReview] = useState<BusinessReview | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [blobEnabled, setBlobEnabled] = useState<boolean | null>(null);
@@ -80,6 +81,7 @@ export default function BusinessPage() {
             piWallet: b.piWallet ?? "",
           });
           setSaved(true);
+          setReview(b.review);
         }
       })
       .catch((e) => setError(e.message))
@@ -146,9 +148,10 @@ export default function BusinessPage() {
     setBusy(true);
     setError("");
     try {
-      await api("/api/me/business", { ...f, piWallet: f.piWallet.toUpperCase() }, "PUT");
+      const r = await api<{ business: SellerBusiness }>("/api/me/business", { ...f, piWallet: f.piWallet.toUpperCase() }, "PUT");
       setSaved(true);
-      showToast("사업자 정보를 저장했어요.");
+      setReview(r.business.review);
+      showToast(businessStatus(r.business) === "pending" ? "제출했어요. 관리자 승인 후 새 상품을 판매할 수 있어요." : "사업자 정보를 저장했어요.");
       const next = new URLSearchParams(window.location.search).get("next");
       if (next?.startsWith("/")) router.push(next);
     } catch (err) {
@@ -227,8 +230,20 @@ export default function BusinessPage() {
         <LoginCard message="로그인하고 사업자 정보를 등록해 주세요." />
       ) : !loaded ? null : (
         <form onSubmit={submit} className="space-y-4 bg-white px-4 py-4">
-          <p className={`rounded-lg p-3 text-xs leading-relaxed ${saved ? "bg-emerald-50 text-emerald-700" : "bg-violet-50 text-pi"}`}>
-            {saved ? "✓ 등록 완료 · 새 상품(정식 판매)을 판매할 수 있어요. " : ""}
+          {saved && review?.status === "pending" && (
+            <p className="rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-800">
+              <b className="block">⏳ 승인 대기 중</b>
+              관리자가 사업자 정보와 서류를 확인하고 있어요. 승인되면 새 상품(정식 판매)을 게시할 수 있어요. 그동안 상품은 임시저장해 둘 수 있어요.
+            </p>
+          )}
+          {saved && review?.status === "rejected" && (
+            <p className="rounded-lg bg-rose-50 p-3 text-xs leading-relaxed text-rose-700">
+              <b className="block">반려됐어요</b>
+              {review.reason ? `사유: ${review.reason}. ` : ""}아래 내용을 고쳐 다시 제출하면 다시 심사해요.
+            </p>
+          )}
+          <p className={`rounded-lg p-3 text-xs leading-relaxed ${saved && businessStatus({ review }) === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-violet-50 text-pi"}`}>
+            {saved && businessStatus({ review }) === "approved" ? "✓ 승인 완료 · 새 상품(정식 판매)을 판매할 수 있어요. " : ""}
             새 상품(정식 판매)을 판매하려면 사업자 정보가 필요해요. 입력한 정보는 전자상거래법에 따라 상품 상세의 ‘판매자 정보’에 표시돼요.
           </p>
           <DummyFillButton onClick={() => void fillDummy()} disabled={blobEnabled === null || !!uploading || busy} />
@@ -301,7 +316,7 @@ export default function BusinessPage() {
           </section>
           {error && <p className="text-sm text-red-500">{error}</p>}
           <button type="submit" disabled={!valid || busy} className="tap w-full rounded-xl bg-pi py-3.5 text-base font-bold text-white disabled:bg-gray-200 disabled:text-gray-400">
-            {busy ? "저장 중…" : saved ? "수정 내용 저장" : "사업자 정보 등록"}
+            {busy ? "저장 중…" : review?.status === "rejected" ? "고쳐서 다시 제출" : saved ? "수정 내용 저장" : "사업자 정보 등록"}
           </button>
         </form>
       )}
