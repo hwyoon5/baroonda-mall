@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
+import DummyFillButton from "@/components/DummyFillButton";
 import FilePicker from "@/components/FilePicker";
 import ShippingTable from "@/components/ShippingTable";
 import ShippingTermsFields from "@/components/ShippingTermsFields";
 import { api } from "@/lib/client/api";
+import { dummyImage } from "@/lib/client/dummy";
 import { resizeImage, uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
 import { MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, hasPolicy, hasShipping, pickPolicy, toShippingDraft, type SellerBusiness, type SellerPolicy } from "@/lib/business";
 import { listingCategories } from "@/lib/categories";
@@ -220,6 +222,20 @@ export default function SellForm({ draftId }: { draftId?: string }) {
       setBusy(false);
     }
   };
+  const fillDummy = async () => {
+    const cat = category || listingCategories[0].id;
+    const stamp = new Date().toTimeString().slice(0, 8);
+    setTitle(`[테스트] 자동 입력 상품 ${stamp}`);
+    setBrand("바로온다");
+    setCategory(cat);
+    setPrice("1");
+    setOriginalPrice("1.5");
+    setStock("10");
+    setOptions([]);
+    setDescription("테스트용으로 자동 입력한 상품이에요. 실제로 판매하지 않아요.\n\n- 상태: 새 상품\n- 배송: 결제 후 1~2일 내 발송");
+    if (!photos.length) await addPhotos([await dummyImage("테스트 상품", [listingCategories.find((c) => c.id === cat)?.name ?? ""], [900, 900])]);
+  };
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     void save(false);
@@ -233,6 +249,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
 
   return (
     <form onSubmit={submit} className="space-y-5 bg-white px-4 py-4">
+      <DummyFillButton onClick={() => void fillDummy()} disabled={busy || loading || photoUploads > 0 || blobEnabled === null} />
       <div>
         <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {photos.length + photoUploads < MAX_PHOTOS && (

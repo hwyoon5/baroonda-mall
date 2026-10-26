@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
+import DummyFillButton from "@/components/DummyFillButton";
 import FilePicker from "@/components/FilePicker";
 import ShippingTermsFields from "@/components/ShippingTermsFields";
 import SubHeader from "@/components/SubHeader";
@@ -10,6 +11,7 @@ import { useStore } from "@/components/store/StoreProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { DEFAULT_POLICY, MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, isBizPhone, isBizRegNo, isEmail, isMailOrderNo, isPiWallet, normalizeShipping, toShippingDraft, type SellerBusiness, type ShippingDraft } from "@/lib/business";
 import { api } from "@/lib/client/api";
+import { TEST_BUSINESS, TEST_SHIPPING, dummyImage } from "@/lib/client/dummy";
 import { canvasToJpeg, resizeImage, uploadMedia } from "@/lib/client/media";
 import { DOC_TYPES, MAX_DOC_BYTES } from "@/lib/media";
 
@@ -131,6 +133,13 @@ export default function BusinessPage() {
     }
   };
 
+  const fillDummy = async () => {
+    set({ ...TEST_BUSINESS, shipping: { ...f.shipping, ...TEST_SHIPPING } });
+    const lines = [`상호: ${TEST_BUSINESS.bizName}`, `대표자: ${TEST_BUSINESS.ownerName}`, `등록번호: ${TEST_BUSINESS.bizRegNo}`];
+    if (!f.bizRegDoc) await attach("bizRegDoc", await dummyImage("사업자등록증", lines));
+    if (!f.mailOrderDoc) await attach("mailOrderDoc", await dummyImage("통신판매업 신고증", lines));
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!valid || busy) return;
@@ -222,6 +231,7 @@ export default function BusinessPage() {
             {saved ? "✓ 등록 완료 · 새 상품(정식 판매)을 판매할 수 있어요. " : ""}
             새 상품(정식 판매)을 판매하려면 사업자 정보가 필요해요. 입력한 정보는 전자상거래법에 따라 상품 상세의 ‘판매자 정보’에 표시돼요.
           </p>
+          <DummyFillButton onClick={() => void fillDummy()} disabled={blobEnabled === null || !!uploading || busy} />
           {row("bizName", "상호명", { maxLength: 40, placeholder: "예: 바로상점" })}
           {row("ownerName", "대표자 성명", { maxLength: 20, placeholder: "예: 홍길동" })}
           {row("bizRegNo", "사업자등록번호", { inputMode: "numeric", maxLength: 12, placeholder: "000-00-00000", onBlur: () => set({ bizRegNo: formatBizRegNo(f.bizRegNo) }) })}
