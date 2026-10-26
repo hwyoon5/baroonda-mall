@@ -10,7 +10,7 @@ import ShippingTermsFields from "@/components/ShippingTermsFields";
 import { api } from "@/lib/client/api";
 import { dummyImage } from "@/lib/client/dummy";
 import { resizeImage, uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
-import { MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, hasPolicy, hasShipping, pickPolicy, toShippingDraft, type SellerBusiness, type SellerPolicy } from "@/lib/business";
+import { MAX_POLICY_CHARS, POLICY_FIELDS, businessStatus, formatBizRegNo, hasPolicy, hasShipping, pickPolicy, toShippingDraft, type SellerBusiness, type SellerPolicy } from "@/lib/business";
 import { listingCategories } from "@/lib/categories";
 import { MAX_PHOTO_BYTES, MAX_PHOTO_SOURCE_BYTES, MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS, optionPresetsFor, presetValuesFor, type OptionPreset } from "@/lib/options";
@@ -633,6 +633,16 @@ export default function SellForm({ draftId }: { draftId?: string }) {
           </div>
         ) : business ? (
           <>
+            {businessStatus(business) !== "approved" && (
+              <div className={`rounded-lg p-3 text-xs leading-relaxed ${businessStatus(business) === "pending" ? "bg-amber-50 text-amber-800" : "bg-rose-50 text-rose-700"}`}>
+                <p className="font-bold">{businessStatus(business) === "pending" ? "사업자 정보 승인 대기 중이에요" : "사업자 정보가 반려됐어요"}</p>
+                <p className="mt-0.5">
+                  {businessStatus(business) === "pending"
+                    ? "관리자 승인 후 새 상품을 게시할 수 있어요. 작성한 내용은 [임시저장] 해 두세요."
+                    : `${business.review?.reason ? `사유: ${business.review.reason}. ` : ""}사업자 정보를 고쳐 다시 제출해 주세요.`}
+                </p>
+              </div>
+            )}
             <p className="flex items-center justify-between rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
               <span>
                 판매자 정보: <b className="text-gray-800">{business.bizName}</b> · {formatBizRegNo(business.bizRegNo)}

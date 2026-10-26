@@ -283,6 +283,10 @@ export async function getBusiness(uid: string): Promise<SellerBusiness | undefin
   return raw ? (JSON.parse(raw) as SellerBusiness) : undefined;
 }
 
+export async function listBusinesses(): Promise<[string, SellerBusiness][]> {
+  return Object.entries(await kv.hgetall(K.business)).map(([uid, raw]) => [uid, JSON.parse(raw) as SellerBusiness]);
+}
+
 export async function saveBusiness(uid: string, business: SellerBusiness) {
   await kv.hset(K.business, uid, JSON.stringify(business));
 }

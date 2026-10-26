@@ -21,6 +21,9 @@ export type SellerBusiness = {
   mailOrderDoc?: string;
   /** 정산 받을 Pi 지갑 공개 주소(G…56자). 공개 화면에는 표시하지 않는다. */
   piWallet?: string;
+  /** 저장한 판매자 Pi 사용자 이름(관리자 심사 화면 표시용) */
+  username?: string;
+  review?: BusinessReview;
   updatedAt: string;
 };
 
@@ -192,3 +195,12 @@ export function isPiWallet(v: string) {
   }
   return crc === (bytes[33] | (bytes[34] << 8));
 }
+
+/** 관리자 사업자 심사. 승인된 판매자만 새 상품(정식 판매)을 게시·판매할 수 있다. */
+export type BusinessReviewStatus = "pending" | "approved" | "rejected";
+export type BusinessReview = { status: BusinessReviewStatus; submittedAt: string; reason?: string; reviewedAt?: string; reviewedBy?: string };
+export const businessReviewLabel: Record<BusinessReviewStatus, string> = { pending: "승인 대기", approved: "승인 완료", rejected: "반려" };
+/** 심사 도입 전에 등록된 사업자(review 없음)는 승인된 것으로 본다. */
+export const businessStatus = (b: Pick<SellerBusiness, "review">): BusinessReviewStatus => b.review?.status ?? "approved";
+/** 바뀌면 다시 심사받는 항목: 신원·서류·정산 지갑 */
+export const REVIEWED_FIELDS = ["bizName", "ownerName", "bizRegNo", "mailOrderNo", "mailOrderExempt", "address", "bizRegDoc", "mailOrderDoc", "piWallet"] as const;

@@ -11,7 +11,7 @@ if (!BASE) {
   BASE = `http://localhost:${PORT}`;
   const busy = await fetch(BASE).then(() => true, () => false);
   if (busy) throw new Error(`포트 ${PORT}이 이미 사용 중이에요(이전 서버가 남아 있을 수 있어요). 종료 후 다시 실행해 주세요.`);
-  server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, PI_MOCK: "1", NEXT_PUBLIC_PI_MOCK: "1", DEMO_SELLER_USERNAME: "demoowner" }, stdio: "ignore", detached: true });
+  server = spawn("npx", ["next", "start", "-p", String(PORT)], { env: { ...process.env, PI_MOCK: "1", NEXT_PUBLIC_PI_MOCK: "1", DEMO_SELLER_USERNAME: "demoowner", ADMIN_USERNAMES: "testadmin" }, stdio: "ignore", detached: true });
   for (let i = 0; ; i++) {
     try {
       if ((await fetch(BASE)).ok) break;
@@ -46,6 +46,18 @@ const buy = async (token, listingId, option) => {
 const DOC = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
 const WALLET = "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7";
 const biz = { bizName: "바로상점", ownerName: "홍길동", bizRegNo: "123-45-67891", mailOrderNo: "제 2024-서울강남-01234 호", address: "서울시 강남구 테헤란로 1", phone: "02-123-4567", bizRegDoc: DOC, mailOrderDoc: DOC, piWallet: WALLET };
+let adminTok;
+// 예시 상품 운영자(demoowner)로 로그인하면 예시 상품이 연결되므로, 승인용으로는 별도 관리자(ADMIN_USERNAMES)를 쓴다.
+const adminToken = async () => (adminTok ??= (await ok("/api/user/signin", { authResult: { accessToken: "mock:testadmin", user: { uid: "mock-testadmin", username: "testadmin" } } })).token);
+/** 사업자 정보 저장 + (승인 대기면) 관리자 승인 */
+const putBiz = async (body, token) => {
+  const d = await ok("/api/me/business", body, token, "PUT");
+  if (d.business.review?.status !== "approved") {
+    const { user } = await ok("/api/me", undefined, token);
+    await ok(`/api/admin/sellers/${user.uid}`, { action: "approve" }, await adminToken());
+  }
+  return d;
+};
 const newBase = { category: "fashion", pricePi: 1, tradeMethods: ["delivery"], images: [], condition: "new", location: "역삼동" };
 
 const tests = [];
@@ -54,7 +66,7 @@ let seller, b1, b2;
 
 test("인증: authResult 검증, uid 불일치 401", async () => {
   [seller, b1, b2] = await Promise.all([signin("seller"), signin("buyer1"), signin("buyer2")]);
-  await ok("/api/me/business", biz, seller, "PUT");
+  await putBiz(biz, seller);
   assert.equal((await call("/api/user/signin", { authResult: { accessToken: "mock:a", user: { uid: "other", username: "x" } } })).status, 401);
 });
 
@@ -273,7 +285,7 @@ test("정산(A2U): 구매 확정 시 판매자에게 1회 송금, 동시 확정�
 
 test("정산 실패 → 주문은 구매 확정 유지, 판매자 재시도로 완료", async () => {
   const flaky = await signin("flaky");
-  await ok("/api/me/business", biz, flaky, "PUT");
+  await putBiz(biz, flaky);
   const { listing: l } = await ok("/api/listings", { ...newBase, title: "정산 재시도", stock: 1 }, flaky);
   const order = await buy(b1, l.id);
   await ok(`/api/orders/${order.id}`, { action: "ship", method: "direct" }, flaky);
@@ -364,10 +376,10 @@ test("사업자 정보: 검증, 게시에 필수(임시저장은 제외), 상세
   for (const bad of [{ bizRegNo: "123-45-67890" }, { mailOrderNo: "강남-1234" }, { phone: "123" }, { bizName: " " }, { email: "x@" }]) {
     assert.equal((await call("/api/me/business", { ...biz, ...bad }, s, "PUT")).status, 400, JSON.stringify(bad));
   }
-  const { business } = await ok("/api/me/business", { ...biz, mailOrderNo: "", mailOrderExempt: true }, s, "PUT");
+  const { business } = await putBiz({ ...biz, mailOrderNo: "", mailOrderExempt: true }, s);
   assert.equal(business.bizRegNo, "1234567891");
   assert.equal(business.mailOrderNo, undefined);
-  const saved = (await ok("/api/me/business", { ...biz }, s, "PUT")).business;
+  const saved = (await putBiz({ ...biz }, s)).business;
   assert.equal(saved.mailOrderNo, "2024-서울강남-01234");
   const { listing: pub } = await ok(`/api/listings/${d.id}`, { ...newBase, title: "새 상품 임시", stock: 3 }, s, "PUT");
   assert.equal(pub.status, "selling");
@@ -379,18 +391,18 @@ test("사업자 정보: 검증, 게시에 필수(임시저장은 제외), 상세
 test("반품·환불·법적 고지: 사업자 정보에 저장 → 새 상품 상세 자동 표시, 상품별 직접 작성", async () => {
   const s = await signin("policy");
   const pol = { returnPolicy: "수령 후 7일 이내 반품 가능", shippingInfo: "결제 후 2일 내 발송", legalNotice: "분쟁은 소비자분쟁해결기준에 따름" };
-  const { business } = await ok("/api/me/business", { ...biz, ...pol, legalNotice: "  " + pol.legalNotice + "  " }, s, "PUT");
+  const { business } = await putBiz({ ...biz, ...pol, legalNotice: "  " + pol.legalNotice + "  " }, s);
   assert.equal(business.legalNotice, pol.legalNotice);
   assert.equal((await ok("/api/me/business", undefined, s)).business.returnPolicy, pol.returnPolicy);
-  assert.equal((await ok("/api/me/business", { ...biz, returnPolicy: "x".repeat(2500) }, s, "PUT")).business.returnPolicy.length, 2000);
-  await ok("/api/me/business", { ...biz, ...pol }, s, "PUT");
+  assert.equal((await putBiz({ ...biz, returnPolicy: "x".repeat(2500) }, s)).business.returnPolicy.length, 2000);
+  await putBiz({ ...biz, ...pol }, s);
   const html = async (id) => (await (await fetch(`${BASE}/listings/${id}`)).text());
 
   const { listing: auto } = await ok("/api/listings", { ...newBase, title: "자동 고지", stock: 1 }, s);
   assert.equal(auto.policy, undefined, "기본 규정은 상품에 복사하지 않고 연동");
   let h = await html(auto.id);
   assert.ok(h.includes("반품·환불 규정") && h.includes(pol.returnPolicy) && h.includes(pol.shippingInfo) && h.includes(pol.legalNotice));
-  await ok("/api/me/business", { ...biz, ...pol, returnPolicy: "수정된 반품 규정" }, s, "PUT");
+  await putBiz({ ...biz, ...pol, returnPolicy: "수정된 반품 규정" }, s);
   assert.ok((await html(auto.id)).includes("수정된 반품 규정"), "사업자 정보 수정이 기존 상품에 반영");
 
   const { listing: custom } = await ok("/api/listings", { ...newBase, title: "직접 고지", stock: 1, policy: { returnPolicy: "이 상품은 14일 반품", shippingInfo: "", legalNotice: "" } }, s);
@@ -405,22 +417,22 @@ test("반품·환불·법적 고지: 사업자 정보에 저장 → 새 상품 �
 test("배송·반품 조건: 사업자 정보 저장·검증 → 새 상품 자동 연동, 상품별 수정", async () => {
   const s = await signin("shipping");
   const ship = { method: " 택배 ", courier: "CJ대한통운", fee: "3", freeOver: "50", remoteFee: "", returnFee: 3, exchangeFee: "6", requestDays: "7" };
-  const { business } = await ok("/api/me/business", { ...biz, shipping: ship }, s, "PUT");
+  const { business } = await putBiz({ ...biz, shipping: ship }, s);
   assert.deepEqual(business.shipping, { method: "택배", courier: "CJ대한통운", fee: 3, freeOver: 50, returnFee: 3, exchangeFee: 6, requestDays: 7 });
   assert.deepEqual((await ok("/api/me/business", undefined, s)).business.shipping, business.shipping);
   for (const bad of [{ requestDays: "3" }, { requestDays: "7.5" }, { requestDays: "400" }, { fee: "-1" }, { returnFee: "abc" }, { exchangeFee: 20000 }]) {
     const r = await call("/api/me/business", { ...biz, shipping: { ...ship, ...bad } }, s, "PUT");
     assert.equal(r.status, 400, JSON.stringify(bad));
   }
-  assert.equal((await ok("/api/me/business", { ...biz, shipping: { method: " ", fee: "" } }, s, "PUT")).business.shipping, undefined, "모두 비우면 저장 안 함");
-  await ok("/api/me/business", { ...biz, shipping: ship }, s, "PUT");
+  assert.equal((await putBiz({ ...biz, shipping: { method: " ", fee: "" } }, s)).business.shipping, undefined, "모두 비우면 저장 안 함");
+  await putBiz({ ...biz, shipping: ship }, s);
   const html = async (id) => (await (await fetch(`${BASE}/listings/${id}`)).text());
 
   const { listing: auto } = await ok("/api/listings", { ...newBase, title: "배송 자동", stock: 1 }, s);
   assert.equal(auto.policy, undefined, "기본 배송 조건은 복사하지 않고 연동");
   let h = await html(auto.id);
   assert.ok(h.includes("배송·반품 조건") && h.includes("CJ대한통운") && h.includes("50π 이상 구매 시 무료") && h.includes("왕복 6π") && h.includes("상품 수령 후 7일 이내"));
-  await ok("/api/me/business", { ...biz, shipping: { ...ship, courier: "한진택배" } }, s, "PUT");
+  await putBiz({ ...biz, shipping: { ...ship, courier: "한진택배" } }, s);
   assert.ok((await html(auto.id)).includes("한진택배"), "사업자 배송 조건 수정이 기존 상품에 반영");
 
   const { listing: custom } = await ok("/api/listings", { ...newBase, title: "배송 수동", stock: 1, policy: { shipping: { ...ship, courier: "우체국택배", fee: "0", requestDays: "14" } } }, s);
@@ -478,7 +490,7 @@ test("쇼츠: 등록·내 상품 연결·숨김·삭제·권한, 피드/관리 �
 
 test("배송비 결제: 기본·무료배송 기준·제주·도서산간·상품별 규정·직거래, 결제·환불 금액 포함", async () => {
   const s = await signin("shipfee");
-  await ok("/api/me/business", { ...biz, shipping: { fee: 3, freeOver: 50, remoteFee: 5 } }, s, "PUT");
+  await putBiz({ ...biz, shipping: { fee: 3, freeOver: 50, remoteFee: 5 } }, s);
   const mk = async (title, extra) => (await ok("/api/listings", { ...newBase, title, stock: 5, ...extra }, s)).listing;
   const order = (id, extra = {}) => ok("/api/orders", { listingId: id, ...extra }, b2);
   const l = await mk("배송비 상품", { pricePi: 10 });
@@ -561,9 +573,9 @@ test("사업자 서류 사본·Pi 지갑 주소: 필수·형식·체크섬 검�
   for (const bad of [{ bizRegDoc: "" }, { bizRegDoc: "https://evil.example.com/business/doc/a.jpg" }, { bizRegDoc: "https://abc123.public.blob.vercel-storage.com/listings/photo/a.jpg" }, { bizRegDoc: "data:text/html;base64,AAAA" }, { mailOrderDoc: undefined }, { piWallet: "" }, { piWallet: typo }, { piWallet: "0x52908400098527886E0F7030069857D2E4169EE7" }, { piWallet: "S" + WALLET.slice(1) }]) {
     assert.equal((await call("/api/me/business", { ...biz, ...bad }, s, "PUT")).status, 400, JSON.stringify(bad));
   }
-  const { business: b } = await ok("/api/me/business", { ...biz, bizRegDoc: blobDoc, piWallet: WALLET.toLowerCase() }, s, "PUT");
+  const { business: b } = await putBiz({ ...biz, bizRegDoc: blobDoc, piWallet: WALLET.toLowerCase() }, s);
   assert.deepEqual([b.bizRegDoc, b.mailOrderDoc, b.piWallet], [blobDoc, DOC, WALLET]);
-  const exempt = (await ok("/api/me/business", { ...biz, mailOrderExempt: true, mailOrderNo: "", mailOrderDoc: undefined }, s, "PUT")).business;
+  const exempt = (await putBiz({ ...biz, mailOrderExempt: true, mailOrderNo: "", mailOrderDoc: undefined }, s)).business;
   assert.equal(exempt.mailOrderDoc, undefined, "면제 대상은 신고증 사본 불필요");
   assert.equal((await ok("/api/me/business", undefined, s)).business.piWallet, WALLET);
   const { listing } = await ok("/api/listings", { ...newBase, title: "서류 비공개", stock: 1 }, s);
@@ -573,7 +585,7 @@ test("사업자 서류 사본·Pi 지갑 주소: 필수·형식·체크섬 검�
 
 test("상품 카드: 배송 조건·구경한 사람 수·별점·구매 건수 표시", async () => {
   const s = await signin("cardmeta");
-  await ok("/api/me/business", { ...biz, shipping: { fee: 0 } }, s, "PUT");
+  await putBiz({ ...biz, shipping: { fee: 0 } }, s);
   const tag = `카드${run}`;
   const { listing: free } = await ok("/api/listings", { ...newBase, title: `${tag} 무료`, stock: 3 }, s);
   const { listing: paid } = await ok("/api/listings", { ...newBase, title: `${tag} 유료`, pricePi: 2, stock: 1, policy: { shipping: { fee: 3, freeOver: 50 } } }, s);
@@ -872,6 +884,40 @@ test("에스크로: 배송 완료 후 구매 확정·7일 자동 확정·반품/
   assert.ok(html.length > 0);
 });
 
+test("판매자 사업자 승인: 대기 중 게시·구매 차단, 관리자 승인·반려(사유), 핵심 정보 변경 시 재심사", async () => {
+  const s = await signin("approval");
+  const admin = await adminToken();
+  const { user } = await ok("/api/me", undefined, s);
+  const { business } = await ok("/api/me/business", biz, s, "PUT");
+  assert.equal(business.review.status, "pending");
+  assert.equal(business.username, user.username);
+  assert.equal((await call("/api/listings", { ...newBase, title: "승인 전", stock: 1 }, s)).status, 403);
+  await ok("/api/listings", { ...newBase, title: "승인 전 임시", stock: 1, draft: true }, s);
+  assert.equal((await call("/api/admin/sellers")).status, 401);
+  assert.equal((await call("/api/admin/sellers", undefined, s)).status, 403);
+  assert.equal((await call(`/api/admin/sellers/${user.uid}`, { action: "approve" }, s)).status, 403, "본인 승인 불가");
+  const row = (await ok("/api/admin/sellers", undefined, admin)).sellers.find((x) => x.uid === user.uid);
+  assert.equal(row.status, "pending");
+  assert.equal(row.business.bizRegDoc, DOC, "관리자는 서류 확인 가능");
+  assert.equal((await call(`/api/admin/sellers/${user.uid}`, { action: "reject" }, admin)).status, 400, "반려 사유 필수");
+  assert.equal((await call(`/api/admin/sellers/nobody`, { action: "approve" }, admin)).status, 404);
+  await ok(`/api/admin/sellers/${user.uid}`, { action: "reject", reason: "사업자등록증 식별 불가" }, admin);
+  const rej = await call("/api/listings", { ...newBase, title: "반려", stock: 1 }, s);
+  assert.equal(rej.status, 403);
+  assert.match(rej.data.error, /식별 불가/);
+  assert.equal((await ok("/api/me/business", biz, s, "PUT")).business.review.status, "pending", "반려 후 재제출 → 다시 대기");
+  await ok(`/api/admin/sellers/${user.uid}`, { action: "approve" }, admin);
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "승인 후", stock: 2 }, s);
+  assert.equal((await ok("/api/me/business", { ...biz, returnPolicy: "반품 규정만 수정" }, s, "PUT")).business.review.status, "approved", "규정만 바꾸면 승인 유지");
+  assert.equal((await ok("/api/me/business", { ...biz, bizName: "바로상점2" }, s, "PUT")).business.review.status, "pending", "상호 변경 → 재심사");
+  assert.equal((await call("/api/orders", { listingId: l.id }, b1)).status, 409, "재심사 중 판매자 상품 구매 차단");
+  await ok(`/api/admin/sellers/${user.uid}`, { action: "approve" }, admin);
+  await ok("/api/orders", { listingId: l.id }, b1);
+  const adminBiz = (await ok("/api/me/business", biz, admin, "PUT")).business;
+  assert.equal(adminBiz.review.status, "approved", "관리자 본인은 자동 승인");
+  for (const p of ["/admin", "/admin/orders", "/admin/sellers", "/admin/settlement"]) assert.equal((await fetch(BASE + p)).status, 200, p);
+});
+
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   const h = await ok("/api/health");
   assert.equal(h.storage, "memory");
@@ -883,7 +929,7 @@ test("배포 점검: /api/health는 설정 여부만 노출", async () => {
 
 test("상품 목록 나눠 불러오기: limit·offset·nextOffset, 검색 첫 화면 20개 + 더 보기", async () => {
   const pager = await signin("pager");
-  await ok("/api/me/business", biz, pager, "PUT");
+  await putBiz(biz, pager);
   const tag = `pg${run}`;
   for (let i = 0; i < 23; i++) await ok("/api/listings", { ...newBase, title: `${tag} n${String(i).padStart(2, "0")}`, stock: 1 }, pager);
   const p1 = await ok(`/api/listings?q=${tag}&limit=20`);
