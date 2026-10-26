@@ -2,7 +2,6 @@ import CategoryGrid from "@/components/CategoryGrid";
 import ListingGrid from "@/components/ListingGrid";
 import SearchHeader from "@/components/SearchHeader";
 import TodayDeals from "@/components/TodayDeals";
-import Link from "next/link";
 import { listListings, withStats } from "@/lib/server/db";
 
 export const dynamic = "force-dynamic";
@@ -17,13 +16,18 @@ export default async function Home() {
       <SearchHeader />
       <main>
         <div className="bg-white px-4 pt-3">
-          <Link href="/sell" className="tap flex items-center justify-between rounded-xl bg-gradient-to-r from-pi to-violet-500 px-4 py-3 text-white">
+          <a
+            href="https://naver.me/FTdj3KY8"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="tap flex items-center justify-between rounded-xl bg-gradient-to-r from-pi to-violet-500 px-4 py-3 text-white"
+          >
             <div>
-              <p className="text-[11px] font-medium opacity-80">Pi 계정만 있으면 누구나</p>
-              <p className="text-sm font-bold">내 물건 올리고 π로 판매하기 &rsaquo;</p>
+              <p className="text-[11px] font-medium opacity-80">네이버 지도에서 열기</p>
+              <p className="text-sm font-bold">Korea 생태계 매장 지도 &rsaquo;</p>
             </div>
-            <span className="text-3xl font-black text-pi-gold">π</span>
-          </Link>
+            <span className="text-3xl">🗺️</span>
+          </a>
         </div>
         <CategoryGrid />
         <TodayDeals deals={deals} />
