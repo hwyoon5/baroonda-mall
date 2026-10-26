@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatOption, timeAgo } from "@/lib/format";
-import type { Order } from "@/lib/types";
+import { refundOpen, type Order } from "@/lib/types";
 import OrderStatusBadge from "./OrderStatusBadge";
 import PiPrice from "./PiPrice";
 
@@ -20,6 +20,9 @@ export default function OrderRow({ order, role }: { order: Order; role: "buyer" 
             <p className="truncate text-[11px] text-sky-700">
               {order.fulfillment.carrier} {order.fulfillment.trackingNumber}
             </p>
+          )}
+          {order.status === "shipped" && order.autoConfirmAt && !refundOpen(order) && (
+            <p className="text-[11px] text-teal-700">{new Date(order.autoConfirmAt).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" })} 자동 구매 확정</p>
           )}
           <p className="text-[11px] text-gray-500">{role === "buyer" ? `판매자 ${order.seller.username}` : `구매자 ${order.buyer.username}`}</p>
         </div>

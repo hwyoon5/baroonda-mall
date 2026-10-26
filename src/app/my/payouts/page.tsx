@@ -7,7 +7,7 @@ import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/client/api";
-import { payoutStatusLabel, refundStatusLabel, type Order } from "@/lib/types";
+import { payoutStatusLabel, claimStatusText, type Order } from "@/lib/types";
 
 const sum = (xs: number[]) => Math.round(xs.reduce((a, b) => a + b, 0) * 1e7) / 1e7;
 
@@ -69,7 +69,7 @@ export default function PayoutsPage() {
                     <span className="text-right">
                       <PiPrice value={o.status === "completed" ? (o.payoutTransfer?.amount ?? o.amount) : o.amount} />
                       <span className={`block text-[11px] font-bold ${o.status === "refunded" || o.payout === "failed" ? "text-rose-600" : o.payout === "paid" ? "text-emerald-600" : "text-amber-600"}`}>
-                        {o.status === "completed" ? payoutStatusLabel[o.payout] : o.refund ? refundStatusLabel[o.refund.status] : ""}
+                        {o.status === "completed" ? payoutStatusLabel[o.payout] : o.refund ? claimStatusText(o.refund) : ""}
                       </span>
                     </span>
                   </Link>

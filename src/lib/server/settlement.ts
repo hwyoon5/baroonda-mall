@@ -1,6 +1,7 @@
-import type { A2UTransfer, Order, PiUser } from "../types";
+import { after } from "next/server";
+import { refundOpen, type A2UTransfer, type Order, type PiUser } from "../types";
 import { appWallet, findA2UTransaction, submitA2UTransaction, TX_TIMEOUT_S } from "./a2u";
-import { getListing, getOrder, saveListing, saveOrder, withLock } from "./db";
+import { getListing, getOrder, listAllOrders, saveListing, saveOrder, withLock } from "./db";
 import { HttpError } from "./http";
 import { adjustStock, listingLock, orderLock } from "./orders";
 import { completePayment, createA2UPayment, getPayment, listIncompleteServerPayments, PiApiError, PiConfigError, piMock } from "./pi";
@@ -17,6 +18,75 @@ const round7 = (n: number) => Math.round(n * 1e7) / 1e7;
 export function feePercent() {
   const v = Number(process.env.PLATFORM_FEE_PERCENT ?? 0);
   return Number.isFinite(v) ? Math.min(Math.max(v, 0), 30) : 0;
+}
+
+/** 배송 완료 후 자동 구매 확정까지 기간(일). 기본 7일 */
+export function autoConfirmDays() {
+  const v = Number(process.env.AUTO_CONFIRM_DAYS ?? 7);
+  return Number.isFinite(v) && v > 0 ? Math.min(v, 30) : 7;
+}
+export const autoConfirmAtFrom = (iso: string) => new Date(new Date(iso).getTime() + autoConfirmDays() * 86_400_000).toISOString();
+
+/** 배송 완료 + 기한 경과 + 진행 중인 반품·교환·환불 요청 없음 */
+export const isAutoConfirmDue = (o: Order, now = Date.now()) =>
+  o.status === "shipped" && !!o.fulfillment?.deliveredAt && !!o.autoConfirmAt && !refundOpen(o) && new Date(o.autoConfirmAt).getTime() <= now;
+
+/** 구매 확정: 에스크로 해제 → 정산 대기. 반드시 주문 락 안에서 호출하고, 이어서 payoutOrder를 실행한다. */
+export async function confirmOrder(o: Order, by: "buyer" | "auto") {
+  o.status = "completed";
+  o.payout = "pending";
+  o.confirmedAt = new Date().toISOString();
+  o.confirmedBy = by;
+  await withLock(listingLock(o.listingId), async () => {
+    const listing = await getListing(o.listingId);
+    if (!listing) return;
+    if (listing.condition === "new") listing.soldCount = (listing.soldCount ?? 0) + 1;
+    else listing.status = "sold";
+    await saveListing(listing);
+  });
+}
+
+/** 기한이 지난 주문을 자동 구매 확정한다. 확정된 주문 ID를 돌려준다. */
+export async function autoConfirmDue(candidates: Order[]) {
+  const ids: string[] = [];
+  for (const c of candidates.filter((o) => isAutoConfirmDue(o))) {
+    const done = await withLock(orderLock(c.id), async () => {
+      const o = await getOrder(c.id);
+      if (!o || !isAutoConfirmDue(o)) return false;
+      await confirmOrder(o, "auto");
+      await saveOrder(o);
+      return true;
+    });
+    if (done) ids.push(c.id);
+  }
+  return ids;
+}
+
+/** 주문을 보여 주기 전에 자동 구매 확정을 반영하고, 판매자 정산(A2U)은 응답 후 이어서 보낸다. */
+export async function withAutoConfirm(orders: Order[]) {
+  const ids = await autoConfirmDue(orders);
+  if (!ids.length) return orders;
+  after(async () => {
+    for (const id of ids) await payoutOrder(id).catch(() => undefined);
+  });
+  return Promise.all(orders.map(async (o) => (ids.includes(o.id) ? ((await getOrder(o.id)) ?? o) : o)));
+}
+
+/** 예약 실행(cron): 자동 구매 확정 + 멈춘 정산(대기 10분 이상, 실패 3회 미만) 재시도 */
+export async function runEscrowJob() {
+  const orders = await listAllOrders();
+  const confirmed = await autoConfirmDue(orders);
+  const stale = Date.now() - 10 * 60_000;
+  const retry = orders
+    .filter((o) => o.status === "completed" && !confirmed.includes(o.id))
+    .filter((o) => (o.payout === "pending" && new Date(o.confirmedAt ?? o.updatedAt).getTime() < stale) || (o.payout === "failed" && (o.payoutTransfer?.attempts ?? 0) < 3))
+    .map((o) => o.id);
+  const results: { id: string; payout: string }[] = [];
+  for (const id of [...confirmed, ...retry]) {
+    const o = await payoutOrder(id).catch(() => undefined);
+    results.push({ id, payout: o?.payout ?? "error" });
+  }
+  return { confirmed, retried: retry, results };
 }
 
 export function payoutBreakdown(amount: number) {

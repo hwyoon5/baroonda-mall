@@ -4,7 +4,15 @@ import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/htt
 import { formatOption } from "@/lib/format";
 import type { Order } from "@/lib/types";
 
-export const GET = handle(async (req) => json(await listOrdersFor(requireUser(req).uid)));
+import { withAutoConfirm } from "@/lib/server/settlement";
+
+/** 자동 구매 확정 후 정산(A2U)을 응답 뒤에 이어서 보낸다. */
+export const maxDuration = 60;
+
+export const GET = handle(async (req) => {
+  const { purchases, sales } = await listOrdersFor(requireUser(req).uid);
+  return json({ purchases: await withAutoConfirm(purchases), sales: await withAutoConfirm(sales) });
+});
 
 /** 구매 시작: 주문을 만들고 Pi.createPayment에 넘길 결제 데이터를 돌려준다. */
 export const POST = handle(async (req) => {
