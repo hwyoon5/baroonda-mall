@@ -10,7 +10,7 @@ import { api } from "@/lib/client/api";
 import { resizeImage, uploadMedia, videoDuration, videoExt } from "@/lib/client/media";
 import { MAX_POLICY_CHARS, POLICY_FIELDS, formatBizRegNo, hasPolicy, hasShipping, pickPolicy, toShippingDraft, type SellerBusiness, type SellerPolicy } from "@/lib/business";
 import { listingCategories } from "@/lib/categories";
-import { MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
+import { MAX_PHOTO_BYTES, MAX_PHOTO_SOURCE_BYTES, MAX_PHOTOS, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_VIDEOS, VIDEO_TYPES } from "@/lib/media";
 import { MAX_OPTION_VALUES, MAX_OPTIONS, MAX_VARIANTS, optionPresetsFor, presetValuesFor, type OptionPreset } from "@/lib/options";
 import type { Listing } from "@/lib/types";
 import { useStore } from "./store/StoreProvider";
@@ -30,6 +30,7 @@ async function preparePhoto(file: File, blob: boolean): Promise<string> {
   if (!blob) return (await resizeImage(file, 720)).toDataURL("image/jpeg", 0.72);
   const canvas = await resizeImage(file, 1280);
   const jpeg = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob"))), "image/jpeg", 0.8));
+  if (jpeg.size > MAX_PHOTO_BYTES) throw new Error("too large");
   return uploadMedia(jpeg, "photo", "jpg");
 }
 
@@ -146,7 +147,9 @@ export default function SellForm({ draftId }: { draftId?: string }) {
 
   const uploading = photoUploads > 0 || videoProgress !== null;
 
-  const addPhotos = async (all: File[]) => {
+  const addPhotos = async (chosen: File[]) => {
+    const all = chosen.filter((f) => f.size <= MAX_PHOTO_SOURCE_BYTES);
+    if (all.length < chosen.length) showToast(`${MAX_PHOTO_SOURCE_BYTES / 1024 / 1024}MB가 넘는 사진은 올릴 수 없어요.`);
     const picked = all.slice(0, Math.max(0, MAX_PHOTOS - photos.length - photoUploads));
     if (picked.length < all.length) showToast(`사진은 최대 ${MAX_PHOTOS}장까지 올릴 수 있어요.`);
     if (!picked.length) return;
@@ -312,7 +315,7 @@ export default function SellForm({ draftId }: { draftId?: string }) {
         </div>
         <p className="mt-1 text-[11px] text-gray-400">
           {blobEnabled
-            ? `사진 최대 ${MAX_PHOTOS}장, 동영상 최대 ${MAX_VIDEOS}개(개당 ${MAX_VIDEO_SECONDS}초·${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하)를 올릴 수 있어요.`
+            ? `사진 최대 ${MAX_PHOTOS}장(자동으로 줄여 장당 ${MAX_PHOTO_BYTES / 1024 / 1024}MB 이하), 동영상 최대 ${MAX_VIDEOS}개(개당 ${MAX_VIDEO_SECONDS}초·${MAX_VIDEO_BYTES / 1024 / 1024}MB 이하)를 올릴 수 있어요.`
             : `사진 최대 ${MAX_PHOTOS}장을 올릴 수 있어요. 동영상은 저장소 연결 후 사용할 수 있어요.`}
         </p>
       </div>

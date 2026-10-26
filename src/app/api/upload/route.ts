@@ -1,5 +1,6 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { handle, HttpError, json, readJson, requireUser } from "@/lib/server/http";
+import { assertDailyQuota } from "@/lib/server/limits";
 import { DOC_TYPES, MAX_DOC_BYTES, MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, PHOTO_TYPES, VIDEO_TYPES } from "@/lib/media";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export const POST = handle(async (req) => {
       const m = /^(?:listings\/(photo|video)|business\/(doc))\/[\w.-]{1,80}$/.exec(pathname);
       const dir = m?.[1] ?? m?.[2];
       if (!dir) throw new HttpError(400, "업로드 경로가 올바르지 않아요.");
+      await assertDailyQuota(user, "upload");
       const [types, max] = dir === "video" ? [VIDEO_TYPES, MAX_VIDEO_BYTES] : dir === "doc" ? [DOC_TYPES, MAX_DOC_BYTES] : [PHOTO_TYPES, MAX_PHOTO_BYTES];
       return {
         allowedContentTypes: types,

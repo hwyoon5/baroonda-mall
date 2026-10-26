@@ -650,11 +650,11 @@ test("하단 메뉴 5칸(거래내역 삭제), 상단 찜 아이콘 → 장바�
   const nav = home.slice(home.lastIndexOf("<nav"), home.indexOf("</nav>", home.lastIndexOf("<nav")));
   assert.equal((nav.match(/<li/g) ?? []).length, 5);
   assert.ok(nav.includes("grid-cols-5") && !nav.includes("거래내역") && !nav.includes('href="/orders"'));
-  assert.ok(nav.includes('href="https://naver.me/FTdj3KY8" target="_blank" rel="noopener noreferrer"') && nav.includes("내주변 매장") && !nav.includes('href="/stores"'), "하단 내주변 매장 탭 → 네이버 지도 새 창");
+  assert.ok(nav.includes('href="https://pages.map.naver.com/save-pages/web/detail-list/32fa173c12ac4cfb970e682d2d2818b3" target="_blank" rel="noopener noreferrer"') && nav.includes("내주변 매장") && !nav.includes('href="/stores"'), "하단 내주변 매장 탭 → 네이버 지도 새 창");
   assert.ok(home.includes("실시간 BEST") && !home.includes("Korea 생태계 매장 지도"), "홈 상단: 지도 배너 → 실시간 BEST");
   assert.ok(home.includes('href="/categories"'), "카테고리는 상단 헤더에서");
   const stores = await (await fetch(`${BASE}/stores`)).text();
-  assert.ok(stores.includes("Korea 생태계 매장 지도") && stores.includes("https://naver.me/FTdj3KY8"));
+  assert.ok(stores.includes("Korea 생태계 매장 지도") && stores.includes("https://pages.map.naver.com/save-pages/web/detail-list/32fa173c12ac4cfb970e682d2d2818b3"));
   const guide = await fetch(`${BASE}/my/guide`);
   assert.equal(guide.status, 200);
   assert.ok((await guide.text()).includes("파이 결제 가이드"));
@@ -878,6 +878,31 @@ test("배포 점검: /api/health는 설정 여부만 노출", async () => {
   assert.equal(h.ok, false);
   assert.ok(!JSON.stringify(h).includes("Key "));
   assert.equal((await fetch(`${BASE}/my/payouts`)).status, 200);
+});
+
+test("상품 목록 나눠 불러오기: limit·offset·nextOffset, 검색 첫 화면 20개 + 더 보기", async () => {
+  const pager = await signin("pager");
+  await ok("/api/me/business", biz, pager, "PUT");
+  const tag = `pg${run}`;
+  for (let i = 0; i < 23; i++) await ok("/api/listings", { ...newBase, title: `${tag} n${String(i).padStart(2, "0")}`, stock: 1 }, pager);
+  const p1 = await ok(`/api/listings?q=${tag}&limit=20`);
+  assert.deepEqual([p1.listings.length, p1.total, p1.nextOffset], [20, 23, 20]);
+  const p2 = await ok(`/api/listings?q=${tag}&limit=20&offset=20`);
+  assert.deepEqual([p2.listings.length, p2.nextOffset], [3, null]);
+  assert.equal(new Set([...p1.listings, ...p2.listings].map((l) => l.id)).size, 23, "중복·누락 없음");
+  assert.ok((await ok("/api/listings?limit=1000")).listings.length <= 60, "한 번에 최대 60개");
+  assert.equal((await ok("/api/listings?seller=me", undefined, pager)).listings.length, 23, "내 상품은 전체");
+  const html = await (await fetch(`${BASE}/search?q=${tag}`)).text();
+  assert.ok(html.includes(`${tag} n22`) && html.includes(`${tag} n03`) && !html.includes(`${tag} n02`), "검색 첫 화면 20개");
+  assert.ok(html.includes("검색 결과") && html.includes("23개") && html.includes("더 보기"), "총 개수·더 보기");
+});
+
+test("도배 방지: 하루 상품 등록 한도(30개, 임시저장 포함) 초과 시 429", async () => {
+  const spam = await signin("spam");
+  for (let i = 0; i < 30; i++) await ok("/api/listings", { ...newBase, title: `도배 ${i}`, draft: true }, spam);
+  const r = await call("/api/listings", { ...newBase, title: "도배 초과", draft: true }, spam);
+  assert.equal(r.status, 429);
+  assert.ok(r.data.error.includes("하루 30개"), r.data.error);
 });
 
 for (const [name, fn] of tests) {

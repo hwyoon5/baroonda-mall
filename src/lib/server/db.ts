@@ -329,3 +329,9 @@ export async function listShorts(f: { authorUid?: string; includeHidden?: boolea
     .filter((s) => !f.authorUid || s.author.uid === f.authorUid)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
+
+/** 사용자별 하루(한국 시간) 사용 횟수를 1 올리고, 한도 안이면 true. */
+export async function takeDailyQuota(kind: string, uid: string, limit: number) {
+  const day = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  return (await kv.hincr(`bo:quota:${kind}:${day}`, uid)) <= limit;
+}
