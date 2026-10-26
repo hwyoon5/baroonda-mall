@@ -296,6 +296,13 @@ export async function saveReview(review: Review) {
   await kv.hset(K.reviews, review.orderId, JSON.stringify(review));
 }
 
+export async function listReviewsForListing(listingId: string) {
+  return (await kv.hvals(K.reviews))
+    .map((v) => JSON.parse(v) as Review)
+    .filter((r) => r.listingId === listingId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 export async function listReviewsForSeller(sellerUid: string) {
   return (await kv.hvals(K.reviews))
     .map((v) => JSON.parse(v) as Review)

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import OrderRow from "@/components/OrderRow";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
@@ -28,12 +29,15 @@ function Orders() {
   const [data, setData] = useState<Record<Tab, Order[]> | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!user) return;
+  const load = useCallback(() => {
     api<Record<Tab, Order[]>>("/api/orders")
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [user]);
+  }, []);
+  useEffect(() => {
+    if (user) load();
+  }, [user, load]);
+  useLiveRefresh(load, !!user);
 
   const list = data?.[tab] ?? [];
   return (

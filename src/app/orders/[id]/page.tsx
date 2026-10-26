@@ -2,7 +2,9 @@
 
 import { formatOption, formatPi } from "@/lib/format";
 import Link from "next/link";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
+import DeliveryControl from "@/components/DeliveryControl";
+import { useLiveRefresh } from "@/hooks/useLiveRefresh";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
 import PiPrice from "@/components/PiPrice";
 import OrderSettlement from "@/components/OrderSettlement";
@@ -12,14 +14,15 @@ import LoginCard from "@/components/pi/LoginCard";
 import { useAuth } from "@/hooks/useAuth";
 import { useStore } from "@/components/store/StoreProvider";
 import { api } from "@/lib/client/api";
-import { carriers, isTrackingNumber, refundOpen, type Order, type OrderStatus, type TradeMethod } from "@/lib/types";
+import { canReview, deliveryStage, refundOpen, type Order } from "@/lib/types";
 
-const steps: { status: OrderStatus; label: string }[] = [
-  { status: "paid", label: "π 결제 완료" },
-  { status: "shipped", label: "발송/전달" },
-  { status: "completed", label: "구매 확정" },
-];
-const rank: Record<OrderStatus, number> = { created: 0, approved: 0, cancelled: 0, refunded: 0, paid: 1, shipped: 2, completed: 3 };
+const steps = ["결제 완료", "상품 준비중", "배송중", "배송 완료", "구매 확정"];
+function progress(o: Order) {
+  if (o.status === "completed") return 5;
+  const st = deliveryStage(o);
+  return st === "delivered" ? 4 : st === "shipping" ? 3 : st === "preparing" ? 2 : st === "ready" ? 1 : 0;
+}
+const time = (iso?: string) => (iso ? new Date(iso).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
 
 export default function OrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -28,16 +31,16 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
   const [order, setOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [shipMethod, setShipMethod] = useState<TradeMethod>("delivery");
-  const [carrier, setCarrier] = useState("");
-  const [tracking, setTracking] = useState("");
-
-  useEffect(() => {
-    if (!user) return;
+  const load = useCallback(() => {
     api<{ order: Order }>(`/api/orders/${id}`)
       .then((r) => setOrder(r.order))
       .catch((e) => setError(e.message));
-  }, [user, id]);
+  }, [id]);
+  useEffect(() => {
+    if (user) load();
+  }, [user, load]);
+  // 구매자는 판매자가 바꾼 배송 상태·송장을 새로고침 없이 본다.
+  useLiveRefresh(load, !!user && !busy && (order?.status === "paid" || order?.status === "shipped"));
 
   const act = async (action: string, extra?: Record<string, string>) => {
     setBusy(true);
@@ -45,7 +48,6 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
       const r = await api<{ order: Order }>(`/api/orders/${id}`, { action, ...extra });
       setOrder(r.order);
       const done: Record<string, string> = {
-        ship: "발송 완료로 변경했어요.",
         confirm: "구매를 확정했어요.",
         refund_request: r.order.status === "refunded" ? "주문을 취소하고 π를 환불했어요." : "환불을 요청했어요.",
         refund_withdraw: "환불 요청을 철회했어요.",
@@ -74,7 +76,7 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
         <>
           <section className="bg-white px-4 py-4">
             <div className="flex items-center justify-between">
-              <OrderStatusBadge status={order.status} />
+              <OrderStatusBadge order={order} />
               <span className="text-[11px] text-gray-400">주문번호 {order.id}</span>
             </div>
             <Link href={`/listings/${order.listingId}`} className="tap mt-3 flex items-center gap-3">
@@ -88,13 +90,14 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
           </section>
 
           {order.status !== "cancelled" && order.status !== "refunded" && (
-            <ol className="mt-2 grid grid-cols-3 bg-white px-4 py-4 text-center text-[11px]">
-              {steps.map((s) => {
-                const done = rank[order.status] >= rank[s.status];
+            <ol aria-label="배송 진행 단계" className="mt-2 grid grid-cols-5 bg-white px-2 py-4 text-center text-[11px]">
+              {steps.map((label, i) => {
+                const done = progress(order) > i;
+                const now = progress(order) === i + 1;
                 return (
-                  <li key={s.status} className={done ? "font-bold text-pi" : "text-gray-400"}>
-                    <span className={`mx-auto mb-1 block h-2.5 w-2.5 rounded-full ${done ? "bg-pi" : "bg-gray-200"}`} />
-                    {s.label}
+                  <li key={label} aria-current={now ? "step" : undefined} className={done ? "font-bold text-pi" : "text-gray-400"}>
+                    <span className={`mx-auto mb-1 block h-2.5 w-2.5 rounded-full ${done ? "bg-pi" : "bg-gray-200"} ${now ? "ring-4 ring-pi/20" : ""}`} />
+                    {label}
                   </li>
                 );
               })}
@@ -118,9 +121,23 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
                 {order.pickup && <span className="text-gray-500"> · 직거래 수령</span>}
               </p>
             )}
+            {deliveryStage(order) && (
+              <p>
+                <span className="inline-block w-20 text-gray-500">배송 상태</span>
+                <span className="font-semibold text-gray-900">
+                  {deliveryStage(order) === "ready"
+                    ? "판매자가 주문을 확인하고 있어요"
+                    : deliveryStage(order) === "preparing"
+                      ? `상품 준비중 (${time(order.preparingAt)})`
+                      : deliveryStage(order) === "shipping"
+                        ? `배송중 (${time(order.fulfillment?.shippedAt)} 발송)`
+                        : `배송 완료 (${time(order.fulfillment?.deliveredAt)})`}
+                </span>
+              </p>
+            )}
             {order.fulfillment && (
               <p>
-                <span className="inline-block w-20 text-gray-500">배송</span>
+                <span className="inline-block w-20 text-gray-500">{order.fulfillment.method === "delivery" ? "택배사·송장" : "배송"}</span>
                 {order.fulfillment.method === "delivery" ? (
                   <>
                     {order.fulfillment.carrier} <span className="font-semibold">{order.fulfillment.trackingNumber}</span>
@@ -147,66 +164,11 @@ export default function OrderPage({ params }: { params: Promise<{ id: string }> 
 
           {(isBuyer || isSeller) && <OrderSettlement order={order} role={isSeller ? "seller" : "buyer"} busy={busy} act={act} />}
 
-          {order.status === "completed" && <div className="mt-2"><ReviewBox orderId={order.id} canWrite={!isSeller} /></div>}
+          {canReview(order) && <div className="mt-2"><ReviewBox orderId={order.id} canWrite={!!isBuyer} /></div>}
 
           <div className="space-y-2 p-4">
-            {isSeller && order.status === "paid" && !refundOpen(order) && (
-              <div className="space-y-2 rounded-xl bg-white p-4">
-                <p className="text-sm font-bold text-gray-900">발송 처리</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(
-                    [
-                      ["delivery", "택배 발송"],
-                      ["direct", "직거래 전달"],
-                    ] as const
-                  ).map(([m, t]) => (
-                    <button
-                      key={m}
-                      type="button"
-                      aria-pressed={shipMethod === m}
-                      onClick={() => setShipMethod(m)}
-                      className={`tap rounded-lg border py-2 text-sm font-medium ${shipMethod === m ? "border-pi bg-pi/5 text-pi ring-1 ring-pi" : "border-gray-200 text-gray-600"}`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                {shipMethod === "delivery" && (
-                  <div className="flex gap-2">
-                    <select
-                      aria-label="택배사"
-                      value={carrier}
-                      onChange={(e) => setCarrier(e.target.value)}
-                      className="shrink-0 rounded-lg border border-gray-200 px-2 py-2.5 text-sm text-gray-900 focus:border-pi focus:outline-none"
-                    >
-                      <option value="">택배사 선택</option>
-                      {carriers.map((c) => (
-                        <option key={c}>{c}</option>
-                      ))}
-                    </select>
-                    <input
-                      aria-label="송장번호"
-                      inputMode="numeric"
-                      value={tracking}
-                      onChange={(e) => setTracking(e.target.value)}
-                      maxLength={24}
-                      placeholder="송장번호 (숫자)"
-                      className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-pi focus:outline-none"
-                    />
-                  </div>
-                )}
-                {shipMethod === "delivery" && tracking.trim() !== "" && !isTrackingNumber(tracking) && (
-                  <p className="text-xs text-red-500">송장번호는 숫자와 - 로 8~20자 입력해 주세요.</p>
-                )}
-                <button
-                  type="button"
-                  disabled={busy || (shipMethod === "delivery" && (!carrier || !isTrackingNumber(tracking)))}
-                  onClick={() => act("ship", { method: shipMethod, carrier, trackingNumber: tracking })}
-                  className="tap w-full rounded-xl bg-pi py-3 text-sm font-bold text-white disabled:opacity-60"
-                >
-                  {shipMethod === "delivery" ? "송장 등록하고 발송 완료" : "직거래 전달 완료"}
-                </button>
-              </div>
+            {isSeller && (order.status === "paid" || order.status === "shipped") && !refundOpen(order) && (
+              <DeliveryControl key={`${order.status}-${order.updatedAt}`} order={order} onSaved={setOrder} />
             )}
             {isBuyer && (order.status === "paid" || order.status === "shipped") && !refundOpen(order) && (
               <button type="button" disabled={busy} onClick={() => act("confirm")} className="tap w-full rounded-xl bg-pi py-3 text-sm font-bold text-white disabled:opacity-60">

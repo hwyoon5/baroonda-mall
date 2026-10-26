@@ -11,11 +11,16 @@ export default function OrderRow({ order, role }: { order: Order; role: "buyer" 
         <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-2xl">{order.listingThumb ?? "📦"}</span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <OrderStatusBadge status={order.status} />
+            <OrderStatusBadge order={order} />
             <span className="text-[11px] text-gray-400">{timeAgo(order.createdAt)}</span>
           </div>
           <p className="mt-1 truncate text-sm text-gray-800">{order.listingTitle}</p>
           {order.option && <p className="truncate text-[11px] text-gray-500">{formatOption(order.option)}</p>}
+          {order.fulfillment?.method === "delivery" && order.status === "shipped" && (
+            <p className="truncate text-[11px] text-sky-700">
+              {order.fulfillment.carrier} {order.fulfillment.trackingNumber}
+            </p>
+          )}
           <p className="text-[11px] text-gray-500">{role === "buyer" ? `판매자 ${order.seller.username}` : `구매자 ${order.buyer.username}`}</p>
         </div>
         <PiPrice value={order.amount} size="md" />

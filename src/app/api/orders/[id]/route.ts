@@ -3,17 +3,19 @@ import { listingLock, orderLock } from "@/lib/server/orders";
 import { payoutOrder, refundOrder } from "@/lib/server/settlement";
 import { carriers, isTrackingNumber, refundOpen, type Order, type PiUser } from "@/lib/types";
 import { HttpError, handle, json, readJson, requireUser } from "@/lib/server/http";
+import { isAdmin } from "@/lib/server/admin";
 
 /** A2U(블록체인 전송)를 기다릴 수 있도록 */
 export const maxDuration = 60;
 
 type Ctx = { params: Promise<{ id: string }> };
-type Body = { action?: string; method?: string; carrier?: string; trackingNumber?: string; reason?: string };
+type Body = { action?: string; method?: string; carrier?: string; trackingNumber?: string; reason?: string; stage?: string };
 
 async function load(req: Request, { params }: Ctx) {
   const user = requireUser(req);
   const order = await getOrder((await params).id);
-  if (!order || (order.buyer.uid !== user.uid && order.seller.uid !== user.uid)) {
+  // 관리자는 모든 주문을 조회하고 배송 상태를 관리할 수 있다(환불·구매 확정·정산은 당사자만).
+  if (!order || (order.buyer.uid !== user.uid && order.seller.uid !== user.uid && !isAdmin(user))) {
     throw new HttpError(404, "주문을 찾을 수 없어요.");
   }
   return { user, order };
@@ -22,6 +24,17 @@ async function load(req: Request, { params }: Ctx) {
 export const GET = handle<Ctx>(async (req, ctx) => json({ order: (await load(req, ctx)).order }));
 
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+/** Shopify fulfillment: 택배는 택배사 + 송장번호 필수, 직거래는 전달 완료만 기록 */
+function shipment(b: Body) {
+  const method = b.method === "direct" ? "direct" : "delivery";
+  if (method === "direct") return { method } as const;
+  const carrier = typeof b.carrier === "string" ? b.carrier : "";
+  const trackingNumber = typeof b.trackingNumber === "string" ? b.trackingNumber.replace(/\s/g, "") : "";
+  if (!(carriers as readonly string[]).includes(carrier)) throw new HttpError(400, "택배사를 선택해 주세요.");
+  if (!isTrackingNumber(trackingNumber)) throw new HttpError(400, "송장번호는 숫자와 - 로 8~20자 입력해 주세요.");
+  return { method, carrier, trackingNumber } as const;
+}
 
 /** 상태 전이만 주문 락 안에서 처리하고, 이어서 필요한 A2U 송금 종류를 돌려준다. */
 async function transition(order: Order, user: PiUser, b: Body): Promise<"payout" | "refund" | null> {
@@ -35,16 +48,32 @@ async function transition(order: Order, user: PiUser, b: Body): Promise<"payout"
       if (!isSeller) throw new HttpError(403, "판매자만 발송 처리할 수 있어요.");
       if (order.status !== "paid") throw new HttpError(409, "결제 완료된 주문만 발송 처리할 수 있어요.");
       if (refundOpen(order)) throw new HttpError(409, "환불 요청을 먼저 처리해 주세요.");
-      // Shopify fulfillment: 택배는 택배사 + 송장번호 필수, 직거래는 전달 완료만 기록
-      const method = b.method === "direct" ? "direct" : "delivery";
-      const carrier = typeof b.carrier === "string" ? b.carrier : "";
-      const trackingNumber = typeof b.trackingNumber === "string" ? b.trackingNumber.replace(/\s/g, "") : "";
-      if (method === "delivery") {
-        if (!(carriers as readonly string[]).includes(carrier)) throw new HttpError(400, "택배사를 선택해 주세요.");
-        if (!isTrackingNumber(trackingNumber)) throw new HttpError(400, "송장번호는 숫자와 - 로 8~20자 입력해 주세요.");
-      }
-      order.fulfillment = { method, ...(method === "delivery" ? { carrier, trackingNumber } : {}), shippedAt: now };
+      order.fulfillment = { ...shipment(b), shippedAt: now };
       order.status = "shipped";
+      return null;
+    }
+    case "delivery": {
+      // 상품 준비중 → 배송중(택배사·송장 등록) → 배송 완료. 송장 수정·단계 되돌리기도 허용한다.
+      if (!isSeller && !isAdmin(user)) throw new HttpError(403, "판매자 또는 관리자만 배송 상태를 바꿀 수 있어요.");
+      if (refundOpen(order)) throw new HttpError(409, "환불 요청을 먼저 처리해 주세요.");
+      if (b.stage === "preparing") {
+        if (order.status !== "paid") throw new HttpError(409, "발송 전 주문만 상품 준비중으로 바꿀 수 있어요.");
+        order.preparingAt ??= now;
+        return null;
+      }
+      if (b.stage !== "shipping" && b.stage !== "delivered") throw new HttpError(400, "배송 상태를 선택해 주세요.");
+      if (order.status === "paid") {
+        order.fulfillment = { ...shipment(b), shippedAt: now };
+        order.status = "shipped";
+      } else if (order.status === "shipped" && order.fulfillment) {
+        if (order.fulfillment.method === "delivery" && (b.carrier !== undefined || b.trackingNumber !== undefined)) {
+          order.fulfillment = { ...order.fulfillment, ...shipment({ ...b, method: "delivery" }) };
+        }
+      } else {
+        throw new HttpError(409, "결제 완료 또는 배송중인 주문만 배송 상태를 바꿀 수 있어요.");
+      }
+      if (b.stage === "delivered") order.fulfillment.deliveredAt ??= now;
+      else delete order.fulfillment.deliveredAt;
       return null;
     }
     case "confirm": {
