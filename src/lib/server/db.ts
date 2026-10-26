@@ -229,6 +229,12 @@ export async function getOrderByPayment(paymentId: string) {
   return id ? getOrder(id) : undefined;
 }
 
+/** 관리자 화면용: 결제를 시작한 모든 주문(최신순) */
+export async function listAllOrders() {
+  const all = (await kv.hvals(K.orders)).map((v) => JSON.parse(v) as Order).filter((o) => o.status !== "created");
+  return all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 export async function listOrdersFor(uid: string) {
   const all = (await kv.hvals(K.orders)).map((v) => JSON.parse(v) as Order).filter((o) => o.status !== "created");
   const byDate = (a: Order, b: Order) => b.createdAt.localeCompare(a.createdAt);
