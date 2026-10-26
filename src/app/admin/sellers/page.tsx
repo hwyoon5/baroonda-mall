@@ -44,7 +44,7 @@ export default function AdminSellersPage() {
           {list.length === 0 ? (
             <p className="p-10 text-center text-sm text-gray-400">해당하는 판매자가 없어요.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:items-start lg:gap-3 lg:space-y-0 lg:px-4">
               {list.map((s) => (
                 <SellerCard key={s.uid + (s.business.review?.reviewedAt ?? "")} seller={s} onSaved={(b) => update(s.uid, b)} />
               ))}
@@ -84,7 +84,7 @@ function SellerCard({ seller: s, onSaved }: { seller: Seller; onSaved: (b: Selle
     ["정산 지갑", b.piWallet ? `${b.piWallet.slice(0, 6)}…${b.piWallet.slice(-6)}` : undefined],
   ];
   return (
-    <li className="bg-white px-4 py-3">
+    <li className="bg-white px-4 py-3 lg:rounded-xl">
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0">
           <b className="block truncate text-sm text-gray-900">{b.bizName}</b>

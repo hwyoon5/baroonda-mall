@@ -72,11 +72,11 @@ function AdminOrders() {
           {orders.length === 0 ? (
             <p className="p-10 text-center text-sm text-gray-400">해당하는 주문이 없어요.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 bg-white">
+            <ul className="divide-y divide-gray-100 bg-white lg:grid lg:grid-cols-2 lg:items-start lg:gap-3 lg:divide-y-0 lg:bg-transparent lg:p-4">
               {orders.map((o) => {
                 const [pay, payClass] = paymentState(o);
                 return (
-                  <li key={o.id} className="px-4 py-3">
+                  <li key={o.id} className="px-4 py-3 lg:rounded-xl lg:bg-white">
                     <div className="flex items-start gap-3">
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-bold text-gray-900">{o.listingTitle}</span>

@@ -59,7 +59,7 @@ export default function AdminShell({ title, error, loading, children }: { title:
               </button>
             </p>
           )}
-          <nav aria-label="관리자 메뉴" className="no-scrollbar sticky top-14 z-10 flex border-b border-gray-100 bg-white">
+          <nav aria-label="관리자 메뉴" className="no-scrollbar sticky top-14 z-10 flex border-b border-gray-100 bg-white lg:hidden">
             {ADMIN_MENU.map((m) => {
               const active = path === m.href;
               return (
@@ -69,7 +69,22 @@ export default function AdminShell({ title, error, loading, children }: { title:
               );
             })}
           </nav>
-          {loading ? <p className="p-10 text-center text-sm text-gray-400">불러오는 중…</p> : children}
+          <div className="lg:flex lg:items-start">
+            <aside aria-label="관리자 메뉴 (PC)" className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-56 shrink-0 flex-col gap-1 border-r border-gray-100 bg-white p-3 lg:flex">
+              {ADMIN_MENU.map((m) => {
+                const active = path === m.href;
+                return (
+                  <Link key={m.href} href={m.href} aria-current={active ? "page" : undefined} className={`rounded-lg px-3 py-2.5 text-sm font-bold ${active ? "bg-pi/10 text-pi" : "text-gray-500 hover:bg-gray-50"}`}>
+                    {m.label}
+                  </Link>
+                );
+              })}
+              <Link href="/" className="mt-auto rounded-lg px-3 py-2.5 text-xs text-gray-400 hover:bg-gray-50">
+                ← 스토어로 돌아가기
+              </Link>
+            </aside>
+            <div className="min-w-0 flex-1 lg:mx-auto lg:max-w-6xl lg:px-4 lg:py-2">{loading ? <p className="p-10 text-center text-sm text-gray-400">불러오는 중…</p> : children}</div>
+          </div>
         </>
       )}
     </>

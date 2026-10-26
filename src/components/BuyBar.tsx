@@ -122,7 +122,7 @@ export default function BuyBar({ listing, shipping: terms }: { listing: Listing;
 
   return (
     <>
-      <div className="fixed inset-x-0 bottom-[calc(57px+env(safe-area-inset-bottom))] z-30 mx-auto flex max-w-md items-center gap-3 border-t border-gray-100 bg-white px-4 py-2.5">
+      <div className="frame fixed inset-x-0 bottom-[calc(57px+env(safe-area-inset-bottom))] z-30 flex items-center gap-3 border-t border-gray-100 bg-white px-4 py-2.5">
         <WishButton id={listing.id} className="h-11 w-11 shrink-0 border border-gray-200 !bg-white" />
         {canCart && (
           <button

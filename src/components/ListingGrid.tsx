@@ -28,7 +28,7 @@ export default function ListingGrid({
       ) : more ? (
         <ListingFeed key={more.query} initial={items} total={more.total} query={more.query} />
       ) : (
-        <ul className="grid grid-cols-2 gap-x-3 gap-y-5">
+        <ul className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 lg:grid-cols-5">
           {items.map((l) => (
             <ListingCard key={l.id} listing={l} />
           ))}

@@ -34,7 +34,7 @@ export default function AdminDashboard() {
         <>
           <section className="p-4">
             <h2 className="text-sm font-extrabold text-gray-900">처리할 일</h2>
-            <div className="mt-2 grid grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-2 lg:grid-cols-6">
               {todo.map(([t, n, href, desc]) => (
                 <Link key={t} href={href} className={`tap rounded-xl p-3 ${n > 0 ? "bg-white ring-1 ring-pi/30" : "bg-white"}`}>
                   <p className="text-[11px] text-gray-500">{t}</p>
@@ -47,7 +47,7 @@ export default function AdminDashboard() {
 
           <section className="px-4">
             <h2 className="text-sm font-extrabold text-gray-900">매출·정산</h2>
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
               {(
                 [
                   ["오늘 결제", todays.reduce((a, o) => a + o.amount, 0), `${todays.length}건`],
@@ -65,7 +65,8 @@ export default function AdminDashboard() {
             </div>
           </section>
 
-          <section className="mt-4 bg-white">
+          <div className="lg:mt-4 lg:grid lg:grid-cols-3 lg:items-start lg:gap-4 lg:px-4">
+          <section className="mt-4 bg-white lg:col-span-2 lg:mt-0 lg:overflow-hidden lg:rounded-xl">
             <div className="flex items-center justify-between px-4 pt-4">
               <h2 className="text-sm font-extrabold text-gray-900">최근 주문</h2>
               <Link href="/admin/orders" className="text-xs text-gray-400">
@@ -95,6 +96,7 @@ export default function AdminDashboard() {
           </section>
 
           <PcCodeCard />
+          </div>
         </>
       )}
     </AdminShell>

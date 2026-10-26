@@ -6,7 +6,7 @@ export default function CategoriesPage() {
   return (
     <>
       <SubHeader title="카테고리" back={false} />
-      <ul className="grid grid-cols-3 gap-3 bg-white p-4">
+      <ul className="grid grid-cols-3 gap-3 bg-white p-4 sm:grid-cols-4 lg:grid-cols-6">
         {listingCategories.map((c) => (
           <li key={c.id}>
             <Link href={c.href} className="tap flex flex-col items-center gap-2 rounded-xl border border-gray-100 py-4">

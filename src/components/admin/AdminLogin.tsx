@@ -35,7 +35,7 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="pb-6">
+    <div className="pb-6 lg:mx-auto lg:max-w-md lg:pt-8">
       <LoginCard message="Pi Browser에서는 관리자 Pi 계정으로 로그인해 주세요." />
 
       <form
