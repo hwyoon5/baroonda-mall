@@ -1,6 +1,6 @@
 import Link from "next/link";
 import SubHeader from "@/components/SubHeader";
-import { STORE_MAP_URL } from "@/lib/links";
+import StoreMapLink from "@/components/StoreMapLink";
 
 export const metadata = { title: "내주변 매장 · 바로온다" };
 
@@ -16,16 +16,9 @@ export default function StoresPage() {
             </span>
             <h2 className="mt-2 text-lg font-extrabold">Korea 생태계 매장 지도</h2>
             <p className="mt-1 text-xs leading-relaxed opacity-90">π로 결제할 수 있는 국내 Pi 생태계 매장을 지도에서 찾아보세요. 내 위치 주변 매장과 길찾기를 네이버 지도에서 볼 수 있어요.</p>
-            <a
-              href={STORE_MAP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="tap mt-4 flex items-center justify-center gap-1 rounded-xl bg-white py-3 text-sm font-extrabold text-pi"
-            >
-              네이버 지도에서 매장 보기 &rsaquo;
-            </a>
+            <StoreMapLink className="tap mt-4 flex items-center justify-center gap-1 rounded-xl bg-white py-3 text-sm font-extrabold text-pi">네이버 지도에서 매장 보기 &rsaquo;</StoreMapLink>
           </div>
-          <p className="mt-2 text-center text-[11px] text-gray-400">네이버 지도(외부 페이지)가 새 창으로 열려요.</p>
+          <p className="mt-2 text-center text-[11px] text-gray-400">휴대폰에서는 네이버 지도 앱이 바로 열려요. 앱이 없으면 웹 지도가 열려요.</p>
         </section>
 
         <section className="bg-white px-4 py-4">
