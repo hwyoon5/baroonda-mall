@@ -2,12 +2,12 @@ import Link from "next/link";
 import SubHeader from "@/components/SubHeader";
 import StoreMapLink from "@/components/StoreMapLink";
 
-export const metadata = { title: "내주변 매장 · 바로온다" };
+export const metadata = { title: "생태계 매장 · 바로온다" };
 
 export default function StoresPage() {
   return (
     <>
-      <SubHeader title="내주변 매장" />
+      <SubHeader title="생태계 매장" />
       <main className="space-y-2 pb-6">
         <section className="bg-white p-4">
           <div className="rounded-2xl bg-gradient-to-br from-pi to-violet-500 p-5 text-white">
