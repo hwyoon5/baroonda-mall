@@ -345,7 +345,7 @@ test("사진 최대 10장·동영상 최대 2개: 개수·형식 검증, 상세 
   const { listing: l } = await ok("/api/listings", { ...base, images: [...Array(9).fill(img), blob("photo")], videos: [blob("video"), v2] }, seller);
   assert.equal(l.images.length, 10);
   assert.deepEqual(l.videos, [blob("video"), v2]);
-  const html = await (await fetch(`${BASE}/listings/${l.id}`)).text();
+  const html = (await (await fetch(`${BASE}/listings/${l.id}`)).text()).replace(/<!-- -->/g, "");
   assert.equal(html.split("<video").length - 1, 2);
   assert.ok(html.includes(blob("video")) && html.includes(v2));
   assert.deepEqual((await ok("/api/upload")).enabled, false);
@@ -708,6 +708,70 @@ test("관리자 결제·정산: 운영자만 전체 주문·집계 조회, 일�
   assert.equal(r7(d.sellers.reduce((a, s) => a + s.grossSales, 0)), d.summary.grossSales);
   assert.ok(d.summary.payoutPaid > 0, "정산 완료 금액 집계");
   assert.equal((await fetch(`${BASE}/admin`)).status, 200);
+});
+
+test("배송 상태: 상품 준비중→배송중(택배사·송장)→배송 완료, 판매자·관리자만 변경, 구매자 조회", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "배송 관리 상품", stock: 3 }, seller);
+  const order = await buy(b1, l.id);
+  const admin = (await ok("/api/user/signin", { authResult: { accessToken: "mock:demoowner", user: { uid: "mock-demoowner", username: "demoowner" } } })).token;
+  assert.equal((await act(order.id, "delivery", b1, { stage: "preparing" })).status, 403, "구매자 변경 불가");
+  assert.equal((await act(order.id, "delivery", b2, { stage: "preparing" })).status, 404, "타인 접근 불가");
+  assert.equal((await act(order.id, "delivery", seller, { stage: "wrong" })).status, 400);
+  let o = (await ok(`/api/orders/${order.id}`, { action: "delivery", stage: "preparing" }, seller)).order;
+  assert.equal(o.status, "paid");
+  assert.ok(o.preparingAt);
+  assert.equal((await ok(`/api/orders/${order.id}`, undefined, b1)).order.preparingAt, o.preparingAt, "구매자에게 상품 준비중 표시");
+  assert.equal((await act(order.id, "delivery", seller, { stage: "shipping" })).status, 400, "택배사·송장 필수");
+  assert.equal((await act(order.id, "delivery", seller, { stage: "shipping", carrier: "CJ대한통운", trackingNumber: "12a" })).status, 400);
+  o = (await ok(`/api/orders/${order.id}`, { action: "delivery", stage: "shipping", carrier: "CJ대한통운", trackingNumber: "1234 5678 9012" }, seller)).order;
+  assert.equal(o.status, "shipped");
+  assert.deepEqual([o.fulfillment.carrier, o.fulfillment.trackingNumber], ["CJ대한통운", "123456789012"]);
+  assert.equal((await act(order.id, "delivery", seller, { stage: "preparing" })).status, 409, "발송 후 준비중 불가");
+  assert.equal((await call(`/api/orders/${order.id}/review`, { rating: 5 }, b1)).status, 409, "배송중에는 후기 불가");
+  assert.equal((await ok(`/api/orders/${order.id}`, undefined, admin)).order.id, order.id, "관리자 조회");
+  o = (await ok(`/api/orders/${order.id}`, { action: "delivery", stage: "delivered", carrier: "한진택배", trackingNumber: "9876-5432-1098" }, admin)).order;
+  assert.ok(o.fulfillment.deliveredAt);
+  assert.equal(o.fulfillment.carrier, "한진택배");
+  const mine = (await ok("/api/orders", undefined, b1)).purchases.find((x) => x.id === order.id);
+  assert.deepEqual([mine.fulfillment.trackingNumber, !!mine.fulfillment.deliveredAt], ["9876-5432-1098", true], "구매자 목록에 송장·배송 완료");
+  assert.equal((await act(order.id, "confirm", admin)).status, 403, "관리자는 구매 확정 불가");
+  assert.equal((await act(order.id, "refund_approve", admin)).status, 403, "관리자는 환불 처리 불가");
+  const back = (await ok(`/api/orders/${order.id}`, { action: "delivery", stage: "shipping" }, seller)).order;
+  assert.equal(back.fulfillment.deliveredAt, undefined, "배송 완료 되돌리기");
+  assert.equal(back.fulfillment.trackingNumber, "9876-5432-1098", "송장 유지");
+  await ok(`/api/orders/${order.id}`, { action: "confirm" }, b1);
+  assert.equal((await act(order.id, "delivery", seller, { stage: "delivered" })).status, 409, "구매 확정 후 변경 불가");
+  assert.equal((await fetch(`${BASE}/orders/${order.id}`)).status, 200);
+});
+
+test("상품 구매 후기: 배송 완료·구매 확정 구매자만 작성, 상세에 평균 별점·분포·목록", async () => {
+  const { listing: l } = await ok("/api/listings", { ...newBase, title: "후기 상세 상품", stock: 5, options: [{ name: "색상", values: ["블랙", "화이트"] }], variants: [{ options: { 색상: "블랙" }, stock: 3 }, { options: { 색상: "화이트" }, stock: 3 }] }, seller);
+  const empty = await ok(`/api/listings/${l.id}/reviews`);
+  assert.deepEqual([empty.count, empty.average, empty.writable, empty.purchase], [0, 0, null, null]);
+  assert.equal((await ok(`/api/listings/${l.id}/reviews`, undefined, b2)).purchase, "none");
+  const o1 = await buy(b1, l.id, { 색상: "블랙" });
+  assert.equal((await ok(`/api/listings/${l.id}/reviews`, undefined, b1)).purchase, "waiting");
+  await ok(`/api/orders/${o1.id}`, { action: "delivery", stage: "delivered", carrier: "우체국택배", trackingNumber: "6000123456789" }, seller);
+  const w = await ok(`/api/listings/${l.id}/reviews`, undefined, b1);
+  assert.equal(w.writable.orderId, o1.id, "배송 완료 후 작성 가능");
+  assert.equal(w.writable.option.색상, "블랙");
+  await ok(`/api/orders/${o1.id}/review`, { rating: 5, text: "배송 빠르고 좋아요" }, b1);
+  const o2 = await buy(b2, l.id, { 색상: "화이트" });
+  await ok(`/api/orders/${o2.id}`, { action: "ship", method: "delivery", carrier: "CJ대한통운", trackingNumber: "111122223333" }, seller);
+  await ok(`/api/orders/${o2.id}`, { action: "confirm" }, b2);
+  await ok(`/api/orders/${o2.id}/review`, { rating: 2, text: "생각보다 작아요" }, b2);
+  const d = await ok(`/api/listings/${l.id}/reviews`, undefined, b1);
+  assert.deepEqual([d.count, d.average, d.distribution], [2, 3.5, [1, 0, 0, 1, 0]]);
+  assert.equal(d.writable, null);
+  assert.equal(d.purchase, "reviewed");
+  assert.equal(d.reviews[0].text, "생각보다 작아요", "최신순");
+  assert.equal(d.reviews[0].option.색상, "화이트");
+  assert.ok(d.reviews.some((r) => r.mine) && d.reviews.some((r) => !r.mine));
+  assert.ok(d.reviews.every((r) => typeof r.buyer === "string" && r.buyer.includes("*")), "구매자 이름 일부 가림");
+  assert.ok(!JSON.stringify(d).includes("mock-b1"), "구매자 uid 비노출");
+  assert.equal((await call(`/api/listings/nope-xyz/reviews`)).status, 404);
+  const html = (await (await fetch(`${BASE}/listings/${l.id}`)).text()).replace(/<!-- -->/g, "");
+  assert.ok(html.includes("구매 후기") && html.includes("후기 2개") && html.includes("3.5"), "상세 페이지 후기 영역");
 });
 
 test("배포 점검: /api/health는 설정 여부만 노출", async () => {

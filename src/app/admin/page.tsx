@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import DeliveryControl from "@/components/DeliveryControl";
 import PiPrice from "@/components/PiPrice";
 import SubHeader from "@/components/SubHeader";
 import LoginCard from "@/components/pi/LoginCard";
 import { useAuth } from "@/hooks/useAuth";
 import { api, ApiError } from "@/lib/client/api";
 import { formatOption } from "@/lib/format";
-import { orderStatusLabel, payoutStatusLabel, type Order, type OrderStatus } from "@/lib/types";
+import { deliveryStage, orderStageLabel, payoutStatusLabel, refundOpen, type Order } from "@/lib/types";
 
 type Settlement = {
   orderCount: number;
@@ -28,13 +29,15 @@ type AdminData = {
   feePercent: number;
 };
 
-const FILTERS: [string, OrderStatus[] | null][] = [
+const FILTERS: [string, ((o: Order) => boolean) | null][] = [
   ["전체", null],
-  ["결제 진행중", ["approved"]],
-  ["결제 완료", ["paid"]],
-  ["발송 완료", ["shipped"]],
-  ["구매 확정", ["completed"]],
-  ["취소·환불", ["cancelled", "refunded"]],
+  ["결제 진행중", (o) => o.status === "approved"],
+  ["신규 주문", (o) => deliveryStage(o) === "ready"],
+  ["상품 준비중", (o) => deliveryStage(o) === "preparing"],
+  ["배송중", (o) => deliveryStage(o) === "shipping"],
+  ["배송 완료", (o) => deliveryStage(o) === "delivered"],
+  ["구매 확정", (o) => o.status === "completed"],
+  ["취소·환불", (o) => o.status === "cancelled" || o.status === "refunded"],
 ];
 
 /** Pi 결제 단계: 서버 승인(approve) → 블록체인 완료(complete) */
@@ -54,6 +57,8 @@ export default function AdminPage() {
   const [error, setError] = useState<{ status?: number; message: string } | null>(null);
   const [tab, setTab] = useState<"orders" | "settlement">("orders");
   const [filter, setFilter] = useState(0);
+  const [open, setOpen] = useState<string | null>(null);
+  const replace = (o: Order) => setData((d) => d && { ...d, orders: d.orders.map((x) => (x.id === o.id ? o : x)) });
 
   useEffect(() => {
     if (!user) return;
@@ -63,8 +68,8 @@ export default function AdminPage() {
       .catch((e) => setError({ status: e instanceof ApiError ? e.status : undefined, message: e.message }));
   }, [user]);
 
-  const statuses = FILTERS[filter][1];
-  const orders = data?.orders.filter((o) => !statuses || statuses.includes(o.status)) ?? [];
+  const match = FILTERS[filter][1];
+  const orders = data?.orders.filter((o) => !match || match(o)) ?? [];
 
   return (
     <>
@@ -105,14 +110,14 @@ export default function AdminPage() {
           {tab === "orders" ? (
             <>
               <div className="no-scrollbar flex gap-1.5 overflow-x-auto bg-white px-4 py-3">
-                {FILTERS.map(([label, st], i) => (
+                {FILTERS.map(([label, m], i) => (
                   <button
                     key={label}
                     type="button"
                     onClick={() => setFilter(i)}
                     className={`shrink-0 rounded-full border px-3 py-1 text-xs ${filter === i ? "border-pi bg-pi text-white" : "border-gray-200 text-gray-600"}`}
                   >
-                    {label} {st ? data.orders.filter((o) => st.includes(o.status)).length : data.orders.length}
+                    {label} {m ? data.orders.filter(m).length : data.orders.length}
                   </button>
                 ))}
               </div>
@@ -137,14 +142,36 @@ export default function AdminPage() {
                             <span className="block text-[11px] text-gray-400">
                               결제 ID {short(o.paymentId)} · txid {short(o.txid)}
                             </span>
+                            {o.fulfillment?.method === "delivery" && (
+                              <span className="block text-[11px] font-medium text-sky-700">
+                                {o.fulfillment.carrier} {o.fulfillment.trackingNumber}
+                              </span>
+                            )}
                           </span>
                           <span className="shrink-0 text-right">
                             <PiPrice value={o.amount} size="sm" />
                             <span className={`mt-1 block rounded px-1.5 py-0.5 text-[11px] font-bold ${payClass}`}>결제 {pay}</span>
-                            <span className="mt-0.5 block text-[11px] text-gray-500">{orderStatusLabel[o.status]}</span>
+                            <span className="mt-0.5 block text-[11px] text-gray-500">{orderStageLabel(o)}</span>
                             {o.status === "completed" && <span className="block text-[11px] text-gray-500">{payoutStatusLabel[o.payout]}</span>}
                           </span>
                         </div>
+                        {(o.status === "paid" || o.status === "shipped") && !refundOpen(o) && (
+                          <>
+                            <button
+                              type="button"
+                              aria-expanded={open === o.id}
+                              onClick={() => setOpen(open === o.id ? null : o.id)}
+                              className="tap mt-2 w-full rounded-lg border border-gray-200 py-1.5 text-xs font-bold text-gray-700"
+                            >
+                              {open === o.id ? "배송 관리 닫기" : "배송 상태·송장 관리"}
+                            </button>
+                            {open === o.id && (
+                              <div className="mt-2 rounded-xl bg-gray-50 p-1">
+                                <DeliveryControl key={o.updatedAt} order={o} onSaved={replace} />
+                              </div>
+                            )}
+                          </>
+                        )}
                       </li>
                     );
                   })}

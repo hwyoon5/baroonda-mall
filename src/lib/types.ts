@@ -115,7 +115,9 @@ export type Order = {
   listingThumb?: string;
   option?: Record<string, string>;
   variantId?: string;
-  fulfillment?: { method: TradeMethod; carrier?: string; trackingNumber?: string; shippedAt: string };
+  fulfillment?: { method: TradeMethod; carrier?: string; trackingNumber?: string; shippedAt: string; deliveredAt?: string };
+  /** 판매자(또는 관리자)가 '상품 준비중'으로 바꾼 시각 */
+  preparingAt?: string;
   amount: number;
   /** amount = itemAmount + shippingFee. 배송비 결제 도입 전 주문에는 없다. */
   itemAmount?: number;
@@ -151,6 +153,27 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
   cancelled: "취소됨",
   refunded: "환불 완료",
 };
+
+/** 결제 완료 후 배송 단계: 신규 주문 → 상품 준비중 → 배송중(발송) → 배송 완료 */
+export type DeliveryStage = "ready" | "preparing" | "shipping" | "delivered";
+export const deliveryStageLabel: Record<DeliveryStage, string> = {
+  ready: "신규 주문",
+  preparing: "상품 준비중",
+  shipping: "배송중",
+  delivered: "배송 완료",
+};
+export function deliveryStage(o: Pick<Order, "status" | "preparingAt" | "fulfillment">): DeliveryStage | null {
+  if (o.status === "paid") return o.preparingAt ? "preparing" : "ready";
+  if (o.status === "shipped") return o.fulfillment?.deliveredAt ? "delivered" : "shipping";
+  return null;
+}
+/** 주문 상태 + 배송 단계를 합친 화면 표시용 이름 */
+export function orderStageLabel(o: Order) {
+  const st = deliveryStage(o);
+  return st && st !== "ready" ? deliveryStageLabel[st] : orderStatusLabel[o.status];
+}
+/** 배송 완료 또는 구매 확정된 주문만 후기를 남길 수 있다. */
+export const canReview = (o: Order) => o.status === "completed" || deliveryStage(o) === "delivered";
 
 export const payoutStatusLabel: Record<PayoutStatus, string> = {
   none: "-",
@@ -207,6 +230,7 @@ export type Review = {
   buyer: PiUser;
   rating: number;
   text: string;
+  option?: Record<string, string>;
   createdAt: string;
 };
 

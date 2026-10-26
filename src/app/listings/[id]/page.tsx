@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import BuyBar from "@/components/BuyBar";
 import FastDeliveryTag from "@/components/FastDeliveryTag";
 import ListingThumb from "@/components/ListingThumb";
+import ProductReviews from "@/components/ProductReviews";
 import SellerInfo from "@/components/SellerInfo";
 import SubHeader from "@/components/SubHeader";
 import TradeMethodTag from "@/components/TradeMethodTag";
@@ -12,7 +13,7 @@ import { findCategory } from "@/lib/categories";
 import { discountRate, formatPi } from "@/lib/format";
 import ShippingTable from "@/components/ShippingTable";
 import { POLICY_FIELDS, effectiveShipping, formatBizRegNo, hasPolicy, pickPolicy } from "@/lib/business";
-import { getBusiness, getListing, listReviewsForSeller } from "@/lib/server/db";
+import { getBusiness, getListing, listReviewsForListing, listReviewsForSeller } from "@/lib/server/db";
 import { listingKindLabel, usageGradeLabel } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,8 @@ function ListingVideo({ src, poster }: { src: string; poster?: string }) {
 export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const listing = await getListing((await params).id);
   if (!listing || listing.status === "draft") notFound();
-  const sellerReviews = await listReviewsForSeller(listing.seller.uid);
+  const [sellerReviews, productReviews] = await Promise.all([listReviewsForSeller(listing.seller.uid), listReviewsForListing(listing.id)]);
+  const productRating = productReviews.length ? (productReviews.reduce((a, r) => a + r.rating, 0) / productReviews.length).toFixed(1) : null;
   const business = listing.condition === "new" ? await getBusiness(listing.seller.uid) : undefined;
   const policy = listing.condition === "new" ? (listing.policy ?? (business ? pickPolicy(business) : undefined)) : undefined;
   const sellerRating = sellerReviews.length ? (sellerReviews.reduce((a, r) => a + r.rating, 0) / sellerReviews.length).toFixed(1) : null;
@@ -86,6 +88,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             <span className="text-pi">π</span> {formatPi(listing.pricePi)}
           </span>
         </p>
+        <a href="#reviews" className="tap mt-1 inline-flex items-center gap-1 text-xs text-gray-500">
+          <span className="text-amber-500">★</span>
+          {productRating ? <span className="font-bold text-gray-800">{productRating}</span> : null}
+          <span className="underline underline-offset-2">후기 {productReviews.length}개</span>
+        </a>
         <div className="mt-3 flex flex-wrap gap-1">
           <span
             className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${listing.condition === "new" ? "bg-pi text-white" : "bg-gray-100 text-gray-700"}`}
@@ -145,6 +152,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         </p>
         <p className="whitespace-pre-line pt-2 leading-relaxed text-gray-700">{listing.description || "판매자가 설명을 남기지 않았어요."}</p>
       </section>
+
+      <ProductReviews listingId={listing.id} />
 
       {policy && hasPolicy(policy) && (
         <section aria-label="반품·교환·환불 안내" className="mt-2 space-y-3 bg-white px-4 py-4 text-xs leading-relaxed text-gray-600">
