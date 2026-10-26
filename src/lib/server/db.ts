@@ -126,8 +126,9 @@ export type ListingFilter = {
   includeUsed?: boolean;
 };
 
-/** 예시 상품을 맡아 관리하는 운영자 Pi 계정(DEMO_SELLER_USERNAME). 그 계정으로 로그인하면 기록된다. */
-export const demoSellerUsername = process.env.DEMO_SELLER_USERNAME?.trim().replace(/^@/, "") || undefined;
+/** 예시 상품을 맡아 관리하는 운영자 Pi 계정(DEMO_SELLER_USERNAME, 없으면 기본 운영자). 그 계정으로 로그인하면 기록된다. */
+const DEFAULT_DEMO_SELLER_USERNAME = "hwyoon5";
+export const demoSellerUsername = process.env.DEMO_SELLER_USERNAME?.trim().replace(/^@/, "") || DEFAULT_DEMO_SELLER_USERNAME;
 
 export async function getDemoOwner(): Promise<PiUser | undefined> {
   const raw = await kv.hget(K.config, "demo-owner");
@@ -136,7 +137,7 @@ export async function getDemoOwner(): Promise<PiUser | undefined> {
 
 /** 로그인한 사용자가 운영자 계정이면 예시 상품 소유자로 연결한다. */
 export async function claimDemoOwner(user: PiUser) {
-  if (!demoSellerUsername || user.username.toLowerCase() !== demoSellerUsername.toLowerCase()) return;
+  if (user.username.toLowerCase() !== demoSellerUsername.toLowerCase()) return;
   const cur = await getDemoOwner();
   if (cur?.uid === user.uid && cur.username === user.username) return;
   await kv.hset(K.config, "demo-owner", JSON.stringify(user));
